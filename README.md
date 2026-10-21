@@ -8,7 +8,10 @@ Eigene Android-Fitness-App für Hard Enduro und Gym.
 - Markierungen während der Fahrt setzen (⚑), die später im Diagramm erscheinen
 - **Gym**: Übungen, Sätze, Wiederholungen, Gewicht, mit „Letztes Mal“-Anzeige
 - **Essen** eintragen und **Kalorienbilanz** (Grundumsatz + Training)
-- **Suunto-Import** über Health Connect
+- **Suunto-Import** über Health Connect: Trainings, **Schritte** (Gehen zählt beim Verbrauch mit) und **Schlaf** mit Phasen
+- **Trinken** protokollieren
+- **Ziele** mit gesunden Standardwerten (Schritte, Wasser, Eiweiß, Schlaf, Kalorienbilanz, 150 aktive Minuten + 2× Kraft pro Woche)
+- **Analyse** für Woche, Monat und 3 Monate: Kaloriendiagramm, Aufteilung des Verbrauchs, Aktivitäten, Ziele, Schlaf und Tagesliste
 - Export als CSV (Trainings, Pulsdaten, Ernährung)
 
 **Installation**

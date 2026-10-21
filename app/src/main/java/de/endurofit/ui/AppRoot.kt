@@ -18,17 +18,17 @@ fun AppRoot() {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var openSession by rememberSaveable { mutableStateOf<String?>(null) }
 
-    // Suunto-Daten beim Start still im Hintergrund nachladen (höchstens einmal pro Stunde)
+    // Suunto-Daten beim Start still im Hintergrund nachladen (höchstens alle 15 Minuten)
     LaunchedEffect(Unit) {
         try {
-            if (System.currentTimeMillis() - Repo.lastImport > 3_600_000L && SuuntoImport.hasPermissions(ctx)) {
-                SuuntoImport.import(ctx, days = 14)
+            if (System.currentTimeMillis() - Repo.lastImport > 15 * 60_000L && SuuntoImport.hasPermissions(ctx)) {
+                SuuntoImport.import(ctx, days = 7)
             }
         } catch (_: Exception) {
         }
     }
 
-    val tabs = listOf("🏠" to "Heute", "❤️" to "Training", "🍽️" to "Essen", "📈" to "Verlauf", "👤" to "Profil")
+    val tabs = listOf("🏠" to "Heute", "❤️" to "Training", "🍽️" to "Essen", "📊" to "Analyse", "👤" to "Profil")
 
     Scaffold(
         bottomBar = {
@@ -55,7 +55,7 @@ fun AppRoot() {
                 )
                 1 -> TrainingScreen(onSaved = { openSession = it; tab = 3 })
                 2 -> FoodScreen()
-                3 -> HistoryScreen(selected = openSession, onSelect = { openSession = it })
+                3 -> AnalysisScreen(selected = openSession, onSelect = { openSession = it })
                 else -> ProfileScreen()
             }
         }

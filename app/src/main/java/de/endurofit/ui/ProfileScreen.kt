@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -16,7 +17,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
+import de.endurofit.data.Analysis
 import de.endurofit.data.Calc
+import de.endurofit.data.Goals
+import de.endurofit.data.KcalMode
 import de.endurofit.data.Profile
 import de.endurofit.data.Repo
 import de.endurofit.health.SuuntoImport
@@ -106,6 +110,8 @@ fun ProfileScreen() {
             }
         }
 
+        GoalsEditor()
+
         SectionCard("Suunto-Daten") { SuuntoImportSection(compact = false) }
 
         SectionCard("Export") {
@@ -142,10 +148,10 @@ fun SuuntoImportSection(compact: Boolean) {
             busy = true
             status = try {
                 val r = SuuntoImport.import(ctx)
-                val base = "${r.imported} neu, ${r.updated} aktualisiert"
-                if (r.imported + r.updated == 0 && r.skippedOtherApps == 0)
+                val base = "Trainings: ${r.imported} neu, ${r.updated} aktualisiert · Schritte: ${r.stepDays} Tage · Schlaf: ${r.nights} Nächte"
+                if (r.imported + r.updated + r.stepDays + r.nights == 0 && r.skippedOtherApps == 0)
                     "Nichts gefunden. Ist in der Suunto-App „In Health Connect speichern“ aktiviert?"
-                else base + if (r.skippedOtherApps > 0) " · ${r.skippedOtherApps} von anderen Apps übersprungen" else ""
+                else base + if (r.skippedOtherApps > 0) " · ${r.skippedOtherApps} Trainings anderer Apps übersprungen" else ""
             } catch (e: Exception) {
                 "Fehler: ${e.message}"
             }
@@ -188,5 +194,74 @@ fun SuuntoImportSection(compact: Boolean) {
     status?.let { Hint(it, Modifier.padding(top = 4.dp)) }
     if (!compact && Repo.lastImport > 0 && status == null) {
         Hint("Zuletzt importiert: ${Calc.fmtDateTime(Repo.lastImport)}", Modifier.padding(top = 4.dp))
+    }
+}
+
+/** Ziele anpassen – mit gesunden Standardwerten. */
+@Composable
+private fun GoalsEditor() {
+    val ctx = LocalContext.current
+    val goals by Repo.goals.collectAsState()
+    val profile by Repo.profile.collectAsState()
+
+    var mode by remember(goals) { mutableStateOf(goals.mode) }
+    var steps by remember(goals) { mutableStateOf(goals.steps.toString()) }
+    var water by remember(goals) { mutableStateOf(if (goals.waterMl > 0) goals.waterMl.toString() else "") }
+    var protein by remember(goals) { mutableStateOf(Calc.fmtNum(goals.proteinPerKg, 1)) }
+    var sleep by remember(goals) { mutableStateOf(Calc.fmtNum(goals.sleepHours, 1)) }
+    var active by remember(goals) { mutableStateOf(goals.weeklyActiveMin.toString()) }
+    var strength by remember(goals) { mutableStateOf(goals.weeklyStrength.toString()) }
+
+    val draft = Goals(
+        steps = steps.toIntOrNull()?.coerceAtLeast(1000) ?: goals.steps,
+        waterMl = water.toIntOrNull() ?: 0,
+        proteinPerKg = Calc.parseNum(protein)?.coerceIn(0.5, 3.0) ?: goals.proteinPerKg,
+        weeklyActiveMin = active.toIntOrNull()?.coerceAtLeast(10) ?: goals.weeklyActiveMin,
+        weeklyStrength = strength.toIntOrNull()?.coerceIn(0, 14) ?: goals.weeklyStrength,
+        sleepHours = Calc.parseNum(sleep)?.coerceIn(4.0, 12.0) ?: goals.sleepHours,
+        mode = mode,
+    )
+
+    SectionCard("Ziele") {
+        Text("Was willst du erreichen?", fontWeight = FontWeight.SemiBold)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp).horizontalScroll(rememberScrollState())) {
+            KcalMode.entries.forEach { m ->
+                FilterChip(selected = mode == m, onClick = { mode = m }, label = { Text(m.label) })
+            }
+        }
+        Hint(mode.hint + " Zielbereich: ${mode.lo} bis +${mode.hi} kcal am Tag.")
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            NumField("Schritte/Tag", steps, { steps = it }, Modifier.weight(1f), decimal = false)
+            NumField("Wasser ml (leer = auto)", water, { water = it }, Modifier.weight(1f), decimal = false)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            NumField("Eiweiß g pro kg", protein, { protein = it }, Modifier.weight(1f))
+            NumField("Schlaf Stunden", sleep, { sleep = it }, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            NumField("Aktive Min./Woche", active, { active = it }, Modifier.weight(1f), decimal = false)
+            NumField("Krafttraining/Woche", strength, { strength = it }, Modifier.weight(1f), decimal = false)
+        }
+        Spacer(Modifier.height(6.dp))
+        Hint(
+            "Für dich heißt das: ${Calc.fmtNum(Analysis.proteinGoal(draft, profile))} g Eiweiß und " +
+                "${Calc.fmtNum(Analysis.waterGoal(draft, profile, 0) / 1000.0, 1)} l Wasser am Tag (an Trainingstagen mehr)."
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(enabled = draft != goals, onClick = {
+                Repo.saveGoals(draft)
+                Toast.makeText(ctx, "Ziele gespeichert", Toast.LENGTH_SHORT).show()
+            }) { Text("Speichern") }
+            TextButton(onClick = { Repo.saveGoals(Goals(mode = mode)) }) { Text("Empfohlene Werte") }
+        }
+        Spacer(Modifier.height(8.dp))
+        Hint(
+            "Warum diese Werte? 7.000–10.000 Schritte am Tag senken laut Studien das Risiko für Herz-Kreislauf-" +
+                "Erkrankungen deutlich. Die WHO empfiehlt 150 Minuten Bewegung und 2× Krafttraining pro Woche. " +
+                "1,6 g Eiweiß pro kg unterstützt den Muskelaufbau bei Krafttraining, 7–9 Stunden Schlaf die Erholung. " +
+                "Das sind allgemeine Richtwerte – bei Vorerkrankungen besser mit dem Arzt absprechen."
+        )
     }
 }

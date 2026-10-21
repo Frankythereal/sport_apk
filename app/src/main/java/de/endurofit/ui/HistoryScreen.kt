@@ -37,7 +37,6 @@ fun HistoryScreen(selected: String?, onSelect: (String?) -> Unit) {
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), contentPadding = PaddingValues(vertical = 16.dp)) {
         item {
-            ScreenTitle("Verlauf")
             SuuntoImportSection(compact = true)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 8.dp).horizontalScroll(rememberScrollState())) {
                 FilterChip(selected = filter == null, onClick = { filter = null }, label = { Text("Alle") })
@@ -52,7 +51,7 @@ fun HistoryScreen(selected: String?, onSelect: (String?) -> Unit) {
 }
 
 @Composable
-private fun SessionDetail(id: String, onBack: () -> Unit) {
+fun SessionDetail(id: String, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val sessions by Repo.sessions.collectAsState()
     val profile by Repo.profile.collectAsState()

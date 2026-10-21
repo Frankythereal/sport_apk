@@ -25,6 +25,98 @@ object Repo {
     private val _profile = MutableStateFlow(Profile())
     val profile: StateFlow<Profile> = _profile
 
+    private val _water = MutableStateFlow<List<WaterEntry>>(emptyList())
+    val water: StateFlow<List<WaterEntry>> = _water
+
+    private val _steps = MutableStateFlow<Map<Long, DaySteps>>(emptyMap())
+    val steps: StateFlow<Map<Long, DaySteps>> = _steps
+
+    private val _sleep = MutableStateFlow<List<SleepEntry>>(emptyList())
+    val sleep: StateFlow<List<SleepEntry>> = _sleep
+
+    private val _goals = MutableStateFlow(Goals())
+    val goals: StateFlow<Goals> = _goals
+
+    private fun <T> loadList(name: String, parse: (JSONObject) -> T): List<T> {
+        val f = File(baseDir, name)
+        if (!f.exists()) return emptyList()
+        return try {
+            val arr = JSONArray(f.readText())
+            (0 until arr.length()).map { parse(arr.getJSONObject(it)) }
+        } catch (e: Exception) {
+            Log.w(TAG, "$name defekt", e); emptyList()
+        }
+    }
+
+    private fun <T> saveList(name: String, list: List<T>, toJson: (T) -> JSONObject) {
+        val arr = JSONArray()
+        list.forEach { arr.put(toJson(it)) }
+        writeAtomic(File(baseDir, name), arr.toString())
+    }
+
+    private fun loadExtras() {
+        _water.value = loadList("water.json") { WaterEntry.fromJson(it) }.sortedByDescending { it.t }
+        _steps.value = loadList("steps.json") { DaySteps.fromJson(it) }.associateBy { it.day }
+        _sleep.value = loadList("sleep.json") { SleepEntry.fromJson(it) }.sortedByDescending { it.end }
+        val g = File(baseDir, "goals.json")
+        if (g.exists()) {
+            try { _goals.value = Goals.fromJson(JSONObject(g.readText())) } catch (e: Exception) { Log.w(TAG, "goals.json defekt", e) }
+        }
+    }
+
+    // ---------- Trinken ----------
+
+    @Synchronized
+    fun addWater(ml: Int, t: Long = System.currentTimeMillis()) {
+        _water.value = (_water.value + WaterEntry("w_${System.nanoTime()}", t, ml)).sortedByDescending { it.t }
+        saveList("water.json", _water.value) { it.toJson() }
+    }
+
+    @Synchronized
+    fun deleteWater(id: String) {
+        _water.value = _water.value.filter { it.id != id }
+        saveList("water.json", _water.value) { it.toJson() }
+    }
+
+    // ---------- Schritte ----------
+
+    /** Ersetzt die Schritte im Zeitraum [fromDay] bis [toDay] (inklusive) durch [list]. */
+    @Synchronized
+    fun replaceSteps(fromDay: Long, toDay: Long, list: List<DaySteps>) {
+        val kept = _steps.value.filterKeys { it < fromDay || it > toDay }
+        _steps.value = kept + list.associateBy { it.day }
+        saveList("steps.json", _steps.value.values.sortedBy { it.day }) { it.toJson() }
+    }
+
+    // ---------- Schlaf ----------
+
+    @Synchronized
+    fun saveSleep(e: SleepEntry) {
+        _sleep.value = (_sleep.value.filter { it.id != e.id } + e).sortedByDescending { it.end }
+        saveList("sleep.json", _sleep.value) { it.toJson() }
+    }
+
+    @Synchronized
+    fun saveSleepBatch(list: List<SleepEntry>) {
+        val ids = list.map { it.id }.toSet()
+        _sleep.value = (_sleep.value.filter { it.id !in ids } + list).sortedByDescending { it.end }
+        saveList("sleep.json", _sleep.value) { it.toJson() }
+    }
+
+    @Synchronized
+    fun deleteSleep(id: String) {
+        _sleep.value = _sleep.value.filter { it.id != id }
+        saveList("sleep.json", _sleep.value) { it.toJson() }
+    }
+
+    // ---------- Ziele ----------
+
+    @Synchronized
+    fun saveGoals(g: Goals) {
+        _goals.value = g
+        writeAtomic(File(baseDir, "goals.json"), g.toJson().toString())
+    }
+
     @Synchronized
     fun init(ctx: Context) {
         if (::baseDir.isInitialized) return
@@ -32,6 +124,7 @@ object Repo {
         sessionDir = File(baseDir, "sessions").apply { mkdirs() }
         prefs = ctx.applicationContext.getSharedPreferences("endurofit", Context.MODE_PRIVATE)
         load()
+        loadExtras()
     }
 
     private fun load() {

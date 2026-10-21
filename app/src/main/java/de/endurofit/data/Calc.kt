@@ -127,6 +127,31 @@ object Calc {
         set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
     }.timeInMillis
 
+    /** Montag der Woche, in der [t] liegt. */
+    fun weekStart(t: Long): Long = Calendar.getInstance(Locale.GERMANY).apply {
+        timeInMillis = dayStart(t)
+        firstDayOfWeek = Calendar.MONDAY
+        set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+        if (timeInMillis > t) add(Calendar.DAY_OF_YEAR, -7)
+    }.timeInMillis
+
+    /** Erster Tag des Monats, verschoben um [offset] Monate. */
+    fun monthStart(t: Long, offset: Int = 0): Long = Calendar.getInstance().apply {
+        timeInMillis = dayStart(t)
+        set(Calendar.DAY_OF_MONTH, 1)
+        add(Calendar.MONTH, offset)
+    }.timeInMillis
+
+    fun daysInMonth(monthStart: Long): Int = Calendar.getInstance().apply { timeInMillis = monthStart }
+        .getActualMaximum(Calendar.DAY_OF_MONTH)
+
+    fun fmtMonth(t: Long): String = SimpleDateFormat("LLLL yyyy", de).format(Date(t))
+    fun fmtShortDate(t: Long): String = SimpleDateFormat("EE dd.MM.", de).format(Date(t))
+    fun fmtHours(ms: Long): String {
+        val m = ms / 60_000
+        return "${m / 60}:${String.format(de, "%02d", m % 60)} h"
+    }
+
     fun addDays(dayStart: Long, days: Int): Long = Calendar.getInstance().apply {
         timeInMillis = dayStart
         add(Calendar.DAY_OF_YEAR, days)

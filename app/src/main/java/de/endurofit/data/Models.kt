@@ -152,3 +152,106 @@ data class Profile(
         )
     }
 }
+
+// ---------- Trinken ----------
+
+data class WaterEntry(val id: String, val t: Long, val ml: Int) {
+    fun toJson(): JSONObject = JSONObject().apply { put("id", id); put("t", t); put("ml", ml) }
+
+    companion object {
+        fun fromJson(o: JSONObject) = WaterEntry(o.getString("id"), o.getLong("t"), o.optInt("ml"))
+    }
+}
+
+// ---------- Schritte (von der Uhr) ----------
+
+/** Schritte eines Tages. [outsideTraining] zählt nur Schritte außerhalb von Trainings. */
+data class DaySteps(val day: Long, val total: Int, val outsideTraining: Int, val source: String) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("day", day); put("total", total); put("outside", outsideTraining); put("source", source)
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject) = DaySteps(
+            o.getLong("day"), o.optInt("total"), o.optInt("outside", o.optInt("total")), o.optString("source")
+        )
+    }
+}
+
+// ---------- Schlaf ----------
+
+data class SleepEntry(
+    val id: String,
+    val start: Long,
+    val end: Long,
+    val source: String,
+    val deepMs: Long = 0,
+    val lightMs: Long = 0,
+    val remMs: Long = 0,
+    val awakeMs: Long = 0,
+) {
+    val durationMs: Long get() = (end - start).coerceAtLeast(0)
+    /** Geschlafene Zeit ohne Wachphasen */
+    val asleepMs: Long get() = (durationMs - awakeMs).coerceAtLeast(0)
+    val hasStages: Boolean get() = deepMs + lightMs + remMs > 0
+
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id); put("start", start); put("end", end); put("source", source)
+        put("deep", deepMs); put("light", lightMs); put("rem", remMs); put("awake", awakeMs)
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject) = SleepEntry(
+            o.getString("id"), o.getLong("start"), o.getLong("end"), o.optString("source"),
+            o.optLong("deep"), o.optLong("light"), o.optLong("rem"), o.optLong("awake"),
+        )
+    }
+}
+
+// ---------- Ziele ----------
+
+enum class KcalMode(val label: String, val lo: Int, val hi: Int, val hint: String) {
+    HALTEN("Gewicht halten", -300, 300, "Verbrauch und Essen in etwa ausgleichen."),
+    ABNEHMEN("Abnehmen", -600, -200, "Ein Defizit von 200–600 kcal am Tag ist gesund und lässt sich durchhalten. Mehr kostet Kraft und Muskeln."),
+    AUFBAUEN("Muskeln aufbauen", 150, 450, "Ein kleiner Überschuss von 150–450 kcal plus Krafttraining baut Muskeln ohne viel Fett auf.");
+
+    companion object {
+        fun of(name: String?): KcalMode = entries.firstOrNull { it.name == name } ?: HALTEN
+    }
+}
+
+/**
+ * Gesunde Standardwerte:
+ * - 8.000 Schritte: Studien zeigen den größten Gesundheitsnutzen zwischen 7.000 und 10.000.
+ * - Wasser 35 ml pro kg Körpergewicht + 500 ml je Trainingsstunde (0 = automatisch).
+ * - Eiweiß 1,6 g pro kg – empfohlen bei regelmäßigem Krafttraining.
+ * - 150 Minuten aktive Bewegung pro Woche und 2× Krafttraining (WHO-Empfehlung).
+ * - 7–9 Stunden Schlaf für Erwachsene.
+ */
+data class Goals(
+    val steps: Int = 8000,
+    val waterMl: Int = 0,
+    val proteinPerKg: Double = 1.6,
+    val weeklyActiveMin: Int = 150,
+    val weeklyStrength: Int = 2,
+    val sleepHours: Double = 7.5,
+    val mode: KcalMode = KcalMode.HALTEN,
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("steps", steps); put("water", waterMl); put("protein", proteinPerKg)
+        put("activeMin", weeklyActiveMin); put("strength", weeklyStrength)
+        put("sleep", sleepHours); put("mode", mode.name)
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject) = Goals(
+            steps = o.optInt("steps", 8000),
+            waterMl = o.optInt("water", 0),
+            proteinPerKg = o.optDouble("protein", 1.6),
+            weeklyActiveMin = o.optInt("activeMin", 150),
+            weeklyStrength = o.optInt("strength", 2),
+            sleepHours = o.optDouble("sleep", 7.5),
+            mode = KcalMode.of(o.optString("mode")),
+        )
+    }
+}
