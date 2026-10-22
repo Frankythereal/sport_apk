@@ -52,15 +52,22 @@ fun AnalysisScreen(selected: String?, onSelect: (String?) -> Unit) {
         SessionDetail(selected, onBack = { onSelect(null) })
         return
     }
-    var view by rememberSaveable { mutableIntStateOf(0) }
+    val view by Nav.analysisView.collectAsState()
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = view == 0, onClick = { view = 0 }, label = { Text("📊 Auswertung") })
-            FilterChip(selected = view == 1, onClick = { view = 1 }, label = { Text("📋 Alle Trainings") })
+        Row(
+            Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp).horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(selected = view == 0, onClick = { Nav.analysisView.value = 0 }, label = { Text("📊 Auswertung") })
+            FilterChip(selected = view == 2, onClick = { Nav.analysisView.value = 2 }, label = { Text("❤️ Herz") })
+            FilterChip(selected = view == 1, onClick = { Nav.analysisView.value = 1 }, label = { Text("📋 Trainings") })
         }
         Box(Modifier.weight(1f)) {
-            if (view == 0) AnalysisContent(onSelect = { onSelect(it) })
-            else HistoryScreen(selected = null, onSelect = onSelect)
+            when (view) {
+                0 -> AnalysisContent(onSelect = { onSelect(it) })
+                2 -> HeartHistory()
+                else -> HistoryScreen(selected = null, onSelect = onSelect)
+            }
         }
     }
 }

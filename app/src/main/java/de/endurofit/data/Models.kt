@@ -293,3 +293,43 @@ data class Spo2Entry(val id: String, val t: Long, val pct: Double, val source: S
         fun fromJson(o: JSONObject) = Spo2Entry(o.getString("id"), o.getLong("t"), o.optDouble("pct"), o.optString("source"))
     }
 }
+
+// ---------- Herzfrequenz über den Tag ----------
+
+/**
+ * Puls eines ganzen Tages (von der Uhr). [points] sind 5-Minuten-Mittelwerte.
+ * [resting] = Ruhepuls; [restingMeasured] = von der Uhr gemessen, sonst aus den Daten geschätzt.
+ */
+data class DayHr(
+    val day: Long,
+    val points: List<HrSample>,
+    val min: Int,
+    val max: Int,
+    val avg: Int,
+    val resting: Int?,
+    val restingMeasured: Boolean,
+    val source: String,
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("day", day); put("min", min); put("max", max); put("avg", avg)
+        resting?.let { put("rest", it) }
+        put("restM", restingMeasured); put("source", source)
+        put("p", JSONArray().also { a -> points.forEach { p -> a.put((p.t - day) / 60_000); a.put(p.bpm) } })
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject): DayHr {
+            val day = o.getLong("day")
+            val arr = o.optJSONArray("p") ?: JSONArray()
+            val pts = ArrayList<HrSample>(arr.length() / 2)
+            var i = 0
+            while (i + 1 < arr.length()) {
+                pts.add(HrSample(day + arr.getLong(i) * 60_000, arr.getInt(i + 1))); i += 2
+            }
+            return DayHr(
+                day, pts, o.optInt("min"), o.optInt("max"), o.optInt("avg"),
+                if (o.has("rest")) o.optInt("rest") else null, o.optBoolean("restM"), o.optString("source"),
+            )
+        }
+    }
+}

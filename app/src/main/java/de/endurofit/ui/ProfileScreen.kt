@@ -163,8 +163,8 @@ fun SuuntoImportSection(compact: Boolean) {
                 val r = SuuntoImport.import(ctx)
                 val src = r.stepSource?.let { " (heute von ${SuuntoImport.appLabel(ctx, it)})" } ?: ""
                 val base = "Trainings: ${r.imported} neu, ${r.updated} aktualisiert · Schritte: ${r.stepDays} Tage$src · " +
-                    "Schlaf: ${r.nights} Nächte · Blutsauerstoff: ${r.spo2} Werte"
-                if (r.imported + r.updated + r.stepDays + r.nights + r.spo2 == 0 && r.skippedOtherApps == 0)
+                    "Puls: ${r.hrDays} Tage · Schlaf: ${r.nights} Nächte · Blutsauerstoff: ${r.spo2} Werte"
+                if (r.imported + r.updated + r.stepDays + r.nights + r.spo2 + r.hrDays == 0 && r.skippedOtherApps == 0)
                     "Health Connect hat keine Daten geliefert. Unten bei „Health Connect prüfen“ siehst du, welche App was liefert."
                 else base + if (r.skippedOtherApps > 0) " · ${r.skippedOtherApps} Trainings anderer Apps übersprungen" else ""
             } catch (e: Exception) {
@@ -181,7 +181,7 @@ fun SuuntoImportSection(compact: Boolean) {
 
     if (!compact) {
         Hint(
-            "Holt Schritte, Blutsauerstoff, Schlaf und Trainings der letzten 30 Tage aus Health Connect – " +
+            "Holt Puls über den Tag, Ruhepuls, Schritte, Blutsauerstoff, Schlaf und Trainings der letzten 30 Tage aus Health Connect – " +
                 "von der Uhr, und wenn die nichts liefert, die Schritte vom Handy (Samsung Health)."
         )
         Spacer(Modifier.height(8.dp))

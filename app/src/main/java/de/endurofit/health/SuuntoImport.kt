@@ -8,6 +8,7 @@ import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
+import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
@@ -15,6 +16,7 @@ import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import de.endurofit.data.Calc
+import de.endurofit.data.DayHr
 import de.endurofit.data.DaySteps
 import de.endurofit.data.HrSample
 import de.endurofit.data.Repo
@@ -45,6 +47,7 @@ object SuuntoImport {
         HealthPermission.getReadPermission(StepsRecord::class),
         HealthPermission.getReadPermission(SleepSessionRecord::class),
         HealthPermission.getReadPermission(OxygenSaturationRecord::class),
+        HealthPermission.getReadPermission(RestingHeartRateRecord::class),
     )
 
     fun available(ctx: Context): Boolean =
@@ -72,6 +75,7 @@ object SuuntoImport {
         val nights: Int,
         val spo2: Int,
         val stepSource: String?,
+        val hrDays: Int,
     )
 
     suspend fun import(ctx: Context, days: Int = 30): Result {
@@ -101,9 +105,14 @@ object SuuntoImport {
         } catch (e: Exception) {
             Log.w(TAG, "SpO2-Import fehlgeschlagen", e); 0
         }
+        val hrDays = try {
+            importDayHr(ctx, client, start, end)
+        } catch (e: Exception) {
+            Log.w(TAG, "Tagespuls-Import fehlgeschlagen", e); 0
+        }
         Repo.lastImport = System.currentTimeMillis()
         val todaySource = Repo.steps.value[Calc.dayStart(System.currentTimeMillis())]?.source
-        return Result(imported, updated, skipped, stepDays, nights, spo2, todaySource)
+        return Result(imported, updated, skipped, stepDays, nights, spo2, todaySource, hrDays)
     }
 
     // ---------- Trainings ----------
@@ -293,6 +302,84 @@ object SuuntoImport {
         } while (token != null)
         if (list.isNotEmpty()) Repo.addSpo2(list)
         return list.size
+    }
+
+    // ---------- Herzfrequenz über den Tag ----------
+
+    /**
+     * Liest alle Pulswerte (nicht nur Trainings) und fasst sie je Tag zu 5-Minuten-Mittelwerten
+     * zusammen. Ruhepuls: von der Uhr, wenn vorhanden – sonst die ruhigsten 30 Minuten des Tages.
+     */
+    private suspend fun importDayHr(ctx: Context, client: HealthConnectClient, start: Instant, end: Instant): Int {
+        val range = TimeRangeFilter.between(start, end)
+        // Quelle -> alle Werte
+        val bySource = HashMap<String, ArrayList<HrSample>>()
+        var token: String? = null
+        do {
+            val resp = client.readRecords(ReadRecordsRequest(HeartRateRecord::class, range, pageToken = token))
+            for (r in resp.records) {
+                val pkg = r.metadata.dataOrigin.packageName
+                if (pkg == ctx.packageName) continue
+                val list = bySource.getOrPut(pkg) { ArrayList() }
+                r.samples.forEach { list.add(HrSample(it.time.toEpochMilli(), it.beatsPerMinute.toInt())) }
+            }
+            token = resp.pageToken
+        } while (token != null)
+        if (bySource.isEmpty()) return 0
+
+        val resting = HashMap<Long, Int>()
+        try {
+            var t2: String? = null
+            do {
+                val resp = client.readRecords(ReadRecordsRequest(RestingHeartRateRecord::class, range, pageToken = t2))
+                resp.records.filter { it.metadata.dataOrigin.packageName != ctx.packageName }
+                    .forEach { resting[Calc.dayStart(it.time.toEpochMilli())] = it.beatsPerMinute.toInt() }
+                t2 = resp.pageToken
+            } while (t2 != null)
+        } catch (_: Exception) {
+            // keine Berechtigung oder keine Daten – dann wird geschätzt
+        }
+
+        val days = bySource.values.flatten().map { Calc.dayStart(it.t) }.toSet()
+        val out = ArrayList<DayHr>()
+        for (day in days) {
+            val next = Calc.addDays(day, 1)
+            // Pro Tag die Quelle mit den meisten Werten, Suunto bevorzugt
+            val (pkg, all) = bySource.entries
+                .map { it.key to it.value.filter { s -> s.t in day until next && s.bpm in 25..230 } }
+                .filter { it.second.isNotEmpty() }
+                .sortedWith(compareByDescending<Pair<String, List<HrSample>>> { isSuunto(it.first) }.thenByDescending { it.second.size })
+                .firstOrNull() ?: continue
+            val sorted = all.sortedBy { it.t }
+            val buckets = sorted.groupBy { (it.t - day) / 300_000 }
+                .map { (b, l) -> HrSample(day + b * 300_000 + 150_000, l.sumOf { it.bpm } / l.size) }
+                .sortedBy { it.t }
+            // Ruhigste 30 Minuten (6 aufeinanderfolgende 5-Minuten-Werte)
+            var est: Int? = null
+            if (buckets.size >= 6) {
+                for (i in 0..buckets.size - 6) {
+                    val win = buckets.subList(i, i + 6)
+                    if (win.last().t - win.first().t > 40 * 60_000) continue
+                    val a = win.sumOf { it.bpm } / 6
+                    if (est == null || a < est) est = a
+                }
+            }
+            val measured = resting[day]
+            out.add(
+                DayHr(
+                    day = day,
+                    points = buckets,
+                    min = sorted.minOf { it.bpm },
+                    max = sorted.maxOf { it.bpm },
+                    avg = sorted.sumOf { it.bpm } / sorted.size,
+                    resting = measured ?: est,
+                    restingMeasured = measured != null,
+                    source = pkg,
+                )
+            )
+        }
+        Repo.replaceDayHr(out)
+        return out.size
     }
 
     // ---------- Diagnose ----------

@@ -69,6 +69,7 @@ fun AppRoot() {
                 0 -> TodayScreen(
                     onOpenTraining = { tab = 1 },
                     onOpenSession = { openSession = it; tab = 3 },
+                    onOpenHeart = { openSession = null; Nav.analysisView.value = 2; tab = 3 },
                 )
                 1 -> TrainingScreen(onSaved = { openSession = it; tab = 3 })
                 2 -> FoodScreen()

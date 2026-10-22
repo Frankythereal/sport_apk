@@ -18,7 +18,7 @@ import de.endurofit.hr.Recorder
 import kotlin.math.abs
 
 @Composable
-fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit) {
+fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit, onOpenHeart: () -> Unit = {}) {
     val sessions by Repo.sessions.collectAsState()
     val food by Repo.food.collectAsState()
     val water by Repo.water.collectAsState()
@@ -121,6 +121,8 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit) {
                 SleepSummary(s)
             }
         }
+
+        HeartTodayCard(onHistory = onOpenHeart)
 
         Spo2Card()
 

@@ -37,6 +37,9 @@ object Repo {
     private val _spo2 = MutableStateFlow<List<Spo2Entry>>(emptyList())
     val spo2: StateFlow<List<Spo2Entry>> = _spo2
 
+    private val _dayHr = MutableStateFlow<Map<Long, DayHr>>(emptyMap())
+    val dayHr: StateFlow<Map<Long, DayHr>> = _dayHr
+
     private val _goals = MutableStateFlow(Goals())
     val goals: StateFlow<Goals> = _goals
 
@@ -62,6 +65,7 @@ object Repo {
         _steps.value = loadList("steps.json") { DaySteps.fromJson(it) }.associateBy { it.day }
         _sleep.value = loadList("sleep.json") { SleepEntry.fromJson(it) }.sortedByDescending { it.end }
         _spo2.value = loadList("spo2.json") { Spo2Entry.fromJson(it) }.sortedByDescending { it.t }
+        _dayHr.value = loadList("dayhr.json") { DayHr.fromJson(it) }.associateBy { it.day }
         val g = File(baseDir, "goals.json")
         if (g.exists()) {
             try { _goals.value = Goals.fromJson(JSONObject(g.readText())) } catch (e: Exception) { Log.w(TAG, "goals.json defekt", e) }
@@ -111,6 +115,17 @@ object Repo {
     fun deleteSleep(id: String) {
         _sleep.value = _sleep.value.filter { it.id != id }
         saveList("sleep.json", _sleep.value) { it.toJson() }
+    }
+
+    // ---------- Herzfrequenz über den Tag ----------
+
+    @Synchronized
+    fun replaceDayHr(list: List<DayHr>) {
+        _dayHr.value = _dayHr.value + list.associateBy { it.day }
+        // Höchstens ein Jahr aufheben
+        val cutoff = System.currentTimeMillis() - 366L * 86_400_000L
+        _dayHr.value = _dayHr.value.filterKeys { it >= cutoff }
+        saveList("dayhr.json", _dayHr.value.values.sortedBy { it.day }) { it.toJson() }
     }
 
     // ---------- Blutsauerstoff ----------
