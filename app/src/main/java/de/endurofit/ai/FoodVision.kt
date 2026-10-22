@@ -56,7 +56,7 @@ Regeln:
 - Gib bei Getränken die Flüssigkeitsmenge in ml an (Wasser, Tee, Kaffee, Saft, Softdrinks, Milch …), sonst 0.
 - Schreibe alle Namen auf Deutsch, kurz und verständlich.
 - Ist kein Essen zu sehen, setze ist_essen auf false und alle Werte auf 0.
-- Antworte ausschließlich über das Werkzeug mahlzeit_erfassen."""
+- Antworte ausschließlich mit dem JSON-Objekt im vorgegebenen Format."""
 
     private fun schema(): JSONObject {
         fun num(desc: String) = JSONObject().put("type", "number").put("description", desc)
@@ -70,6 +70,7 @@ Regeln:
                 .put("kohlenhydrate_g", num("Kohlenhydrate in g"))
                 .put("fett_g", num("Fett in g")))
             .put("required", JSONArray(listOf("name", "menge_g", "kcal", "eiweiss_g", "kohlenhydrate_g", "fett_g")))
+            .put("additionalProperties", false)
         return JSONObject()
             .put("type", "object")
             .put("properties", JSONObject()
@@ -84,7 +85,8 @@ Regeln:
                 .put("fluessigkeit_ml", num("Trinkmenge in ml, 0 wenn kein Getränk"))
                 .put("sicherheit", JSONObject().put("type", "string").put("enum", JSONArray(listOf("hoch", "mittel", "niedrig"))))
                 .put("hinweis", JSONObject().put("type", "string").put("description", "kurzer Hinweis, z. B. was schwer zu schätzen war")))
-            .put("required", JSONArray(listOf("ist_essen", "art", "name", "zutaten", "kcal", "eiweiss_g", "kohlenhydrate_g", "fett_g", "fluessigkeit_ml", "sicherheit")))
+            .put("required", JSONArray(listOf("ist_essen", "art", "name", "zutaten", "kcal", "eiweiss_g", "kohlenhydrate_g", "fett_g", "fluessigkeit_ml", "sicherheit", "hinweis")))
+            .put("additionalProperties", false)
     }
 
     /** Lädt das Bild, dreht es richtig (EXIF) und verkleinert es auf max. 1280 px. */
@@ -118,13 +120,12 @@ Regeln:
         }
         val body = JSONObject()
             .put("model", Repo.claudeModel)
-            .put("max_tokens", 1500)
+            .put("max_tokens", 3000)
             .put("system", SYSTEM)
-            .put("tools", JSONArray().put(JSONObject()
-                .put("name", "mahlzeit_erfassen")
-                .put("description", "Erfasst die geschätzten Nährwerte der Mahlzeit auf dem Foto.")
-                .put("input_schema", schema())))
-            .put("tool_choice", JSONObject().put("type", "tool").put("name", "mahlzeit_erfassen"))
+            // Erzwingt eine Antwort genau im vorgegebenen JSON-Format
+            .put("output_config", JSONObject().put("format", JSONObject()
+                .put("type", "json_schema")
+                .put("schema", schema())))
             .put("messages", JSONArray().put(JSONObject()
                 .put("role", "user")
                 .put("content", JSONArray()
@@ -202,12 +203,24 @@ Regeln:
 
     private fun parse(resp: JSONObject): Result {
         val content = resp.optJSONArray("content") ?: throw VisionException("Leere Antwort.")
-        var input: JSONObject? = null
-        for (i in 0 until content.length()) {
-            val c = content.getJSONObject(i)
-            if (c.optString("type") == "tool_use") input = c.optJSONObject("input")
+        if (resp.optString("stop_reason") == "max_tokens") throw VisionException("Die Antwort war zu lang – bitte nochmal versuchen.")
+        val text = buildString {
+            for (i in 0 until content.length()) {
+                val c = content.getJSONObject(i)
+                if (c.optString("type") == "text") append(c.optString("text"))
+            }
         }
-        val o = input ?: throw VisionException("Die Antwort war unvollständig – bitte nochmal versuchen.")
+        val o = try {
+            JSONObject(text)
+        } catch (_: Exception) {
+            // Falls doch Text drumherum steht: das JSON-Objekt herausschneiden
+            val a = text.indexOf('{')
+            val b = text.lastIndexOf('}')
+            if (a < 0 || b <= a) throw VisionException("Die Antwort war unvollständig – bitte nochmal versuchen.")
+            try { JSONObject(text.substring(a, b + 1)) } catch (_: Exception) {
+                throw VisionException("Die Antwort war unvollständig – bitte nochmal versuchen.")
+            }
+        }
         val arr = o.optJSONArray("zutaten") ?: JSONArray()
         val items = (0 until arr.length()).map {
             val z = arr.getJSONObject(it)
