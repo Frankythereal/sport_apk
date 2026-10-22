@@ -2,6 +2,7 @@
 
 package de.endurofit.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -33,6 +34,14 @@ fun FoodScreen() {
     var day by rememberSaveable { mutableLongStateOf(today) }
     var dialog by remember { mutableStateOf(false) }
     var prefill by remember { mutableStateOf<FoodEntry?>(null) }
+    var editing by remember { mutableStateOf<FoodEntry?>(null) }
+    var paste by remember { mutableStateOf(false) }
+    var pasteText by remember { mutableStateOf("") }
+    // Text, der aus ChatGPT o. Ä. an EnduroFit geteilt wurde
+    val sharedText by SharedFoodText.text.collectAsState()
+    LaunchedEffect(sharedText) {
+        sharedText?.let { pasteText = it; paste = true; SharedFoodText.text.value = null }
+    }
 
     val next = Calc.addDays(day, 1)
     val entries = food.filter { it.t in day until next }.sortedBy { it.t }
@@ -95,8 +104,13 @@ fun FoodScreen() {
 
         FoodPhotoButtons(day)
         Spacer(Modifier.height(6.dp))
-        OutlinedButton(onClick = { prefill = null; dialog = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("✏️ Von Hand eintragen")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { prefill = null; dialog = true }, modifier = Modifier.weight(1f)) {
+                Text("✏️ Von Hand")
+            }
+            OutlinedButton(onClick = { pasteText = ""; paste = true }, modifier = Modifier.weight(1f)) {
+                Text("📋 Text einfügen")
+            }
         }
         Spacer(Modifier.height(8.dp))
 
@@ -115,7 +129,10 @@ fun FoodScreen() {
         SectionCard("Einträge") {
             if (entries.isEmpty()) Hint("Noch nichts eingetragen.")
             entries.forEach { e ->
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().clickable { editing = e }.padding(vertical = 6.dp)
+                ) {
                     Text(Calc.fmtClock(e.t), Modifier.width(52.dp), style = MaterialTheme.typography.bodySmall)
                     Column(Modifier.weight(1f)) {
                         Text((if (e.fromPhoto) "📷 " else "") + e.name)
@@ -124,9 +141,10 @@ fun FoodScreen() {
                         }
                     }
                     Text("${Calc.fmtNum(e.kcal)} kcal", fontWeight = FontWeight.SemiBold)
-                    TextButton(onClick = { Repo.deleteFood(e.id) }) { Text("✕") }
+                    Text("  ✎", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            if (entries.isNotEmpty()) Hint("Eintrag antippen zum Bearbeiten oder Löschen.", Modifier.padding(top = 4.dp))
         }
     }
 
@@ -136,6 +154,22 @@ fun FoodScreen() {
             prefill = prefill,
             onDismiss = { dialog = false },
             onSave = { Repo.addFood(it); dialog = false },
+        )
+    }
+    editing?.let { e ->
+        FoodDialog(
+            day = Calc.dayStart(e.t),
+            editing = e,
+            onDismiss = { editing = null },
+            onSave = { Repo.addFood(it); editing = null },
+            onDelete = { Repo.deleteFood(e.id); editing = null },
+        )
+    }
+    if (paste) {
+        PasteFoodDialog(
+            initial = pasteText,
+            onDismiss = { paste = false },
+            onParsed = { entry -> paste = false; prefill = entry; dialog = true },
         )
     }
 }

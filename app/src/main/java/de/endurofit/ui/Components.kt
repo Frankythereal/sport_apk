@@ -5,6 +5,8 @@ package de.endurofit.ui
 import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -141,60 +143,104 @@ fun SessionRow(s: Session, onClick: () -> Unit) {
     }
 }
 
-/** Dialog zum Eintragen einer Mahlzeit. */
+/** Dialog zum Eintragen oder nachträglichen Bearbeiten einer Mahlzeit. */
 @Composable
 fun FoodDialog(
     day: Long,
     prefill: FoodEntry? = null,
+    editing: FoodEntry? = null,
     onDismiss: () -> Unit,
     onSave: (FoodEntry) -> Unit,
+    onDelete: (() -> Unit)? = null,
 ) {
-    var name by remember { mutableStateOf(prefill?.name ?: "") }
-    var kcal by remember { mutableStateOf(prefill?.kcal?.let { Calc.fmtNum(it) } ?: "") }
-    var protein by remember { mutableStateOf(prefill?.protein?.takeIf { it > 0 }?.let { Calc.fmtNum(it) } ?: "") }
-    var carbs by remember { mutableStateOf(prefill?.carbs?.takeIf { it > 0 }?.let { Calc.fmtNum(it) } ?: "") }
-    var fat by remember { mutableStateOf(prefill?.fat?.takeIf { it > 0 }?.let { Calc.fmtNum(it) } ?: "") }
+    val src = editing ?: prefill
+    var name by remember { mutableStateOf(src?.name ?: "") }
+    var kcal by remember { mutableStateOf(src?.kcal?.let { Calc.fmtNum(it) } ?: "") }
+    var protein by remember { mutableStateOf(src?.protein?.takeIf { it > 0 }?.let { Calc.fmtNum(it, 1).removeSuffix(",0") } ?: "") }
+    var carbs by remember { mutableStateOf(src?.carbs?.takeIf { it > 0 }?.let { Calc.fmtNum(it, 1).removeSuffix(",0") } ?: "") }
+    var fat by remember { mutableStateOf(src?.fat?.takeIf { it > 0 }?.let { Calc.fmtNum(it, 1).removeSuffix(",0") } ?: "") }
+    val now = System.currentTimeMillis()
+    val defaultT = editing?.t ?: if (Calc.dayStart(now) == day) now else day + 12 * 3_600_000L
+    var time by remember { mutableStateOf(Calc.fmtClock(defaultT)) }
+    var confirmDelete by remember { mutableStateOf(false) }
+
     val kcalVal = Calc.parseNum(kcal)
-    val valid = name.isNotBlank() && kcalVal != null
+    val timeVal = parseClock(time)
+    val valid = name.isNotBlank() && kcalVal != null && timeVal != null
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Essen eintragen") },
+        title = { Text(if (editing != null) "Eintrag bearbeiten" else "Essen eintragen") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = name, onValueChange = { name = it },
                     label = { Text("Was? (z. B. Nudeln mit Hähnchen)") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                NumField("Kalorien (kcal)", kcal, { kcal = it }, Modifier.fillMaxWidth())
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    NumField("Kalorien (kcal)", kcal, { kcal = it }, Modifier.weight(1.6f))
+                    OutlinedTextField(
+                        value = time, onValueChange = { v -> time = v.filter { it.isDigit() || it == ':' || it == '.' }.take(5) },
+                        label = { Text("Uhrzeit") }, singleLine = true, isError = timeVal == null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     NumField("Eiweiß g", protein, { protein = it }, Modifier.weight(1f))
                     NumField("Kohlenh. g", carbs, { carbs = it }, Modifier.weight(1f))
                     NumField("Fett g", fat, { fat = it }, Modifier.weight(1f))
                 }
-                Hint("Nährwerte sind optional. Kalorien findest du auf der Verpackung oder in einer Nährwert-Tabelle.")
+                if (editing?.fromPhoto == true) Hint("📷 Ursprünglich per Foto erkannt.")
+                else if (editing == null) Hint("Nährwerte sind optional.")
+                if (onDelete != null) {
+                    TextButton(onClick = { confirmDelete = true }) { Text("🗑️ Eintrag löschen", color = Bad) }
+                }
             }
         },
         confirmButton = {
             Button(enabled = valid, onClick = {
-                val now = System.currentTimeMillis()
-                val t = if (Calc.dayStart(now) == day) now else day + 12 * 3_600_000L
+                val t = day + (timeVal ?: 12 * 60) * 60_000L
                 onSave(
                     FoodEntry(
-                        id = "f_$now",
+                        id = editing?.id ?: "f_$now",
                         t = t,
                         name = name.trim(),
                         kcal = kcalVal ?: 0.0,
                         protein = Calc.parseNum(protein) ?: 0.0,
                         carbs = Calc.parseNum(carbs) ?: 0.0,
                         fat = Calc.parseNum(fat) ?: 0.0,
+                        fromPhoto = editing?.fromPhoto ?: prefill?.fromPhoto ?: false,
                     )
                 )
             }) { Text("Speichern") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
     )
+
+    if (confirmDelete && onDelete != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Eintrag löschen?") },
+            text = { Text("„$name“ wird entfernt.") },
+            confirmButton = { Button(onClick = { confirmDelete = false; onDelete() }) { Text("Löschen") } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Abbrechen") } },
+        )
+    }
+}
+
+/** "7:30", "07.30" oder "730" → Minuten seit Mitternacht. */
+fun parseClock(s: String): Int? {
+    val t = s.trim().replace('.', ':')
+    val (h, m) = when {
+        ':' in t -> t.substringBefore(':').toIntOrNull() to t.substringAfter(':').ifEmpty { "0" }.toIntOrNull()
+        t.length in 3..4 -> t.dropLast(2).toIntOrNull() to t.takeLast(2).toIntOrNull()
+        t.length in 1..2 -> t.toIntOrNull() to 0
+        else -> null to null
+    }
+    if (h == null || m == null || h !in 0..23 || m !in 0..59) return null
+    return h * 60 + m
 }
 
 /** CSV-Dateien, die sich direkt in Excel öffnen lassen (Semikolon, Komma als Dezimalzeichen). */

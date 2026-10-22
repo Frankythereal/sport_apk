@@ -31,6 +31,8 @@ import kotlin.math.roundToInt
 /** Welche Ansicht im Analyse-Tab offen ist (0 = Auswertung, 1 = Trainings, 2 = Herz). */
 object Nav {
     val analysisView = MutableStateFlow(0)
+    /** Wird gesetzt, wenn Text geteilt wurde – dann zum Essen-Tab springen. */
+    val openFood = MutableStateFlow(false)
 }
 
 private val RestColor = Color(0xFFFF7043)

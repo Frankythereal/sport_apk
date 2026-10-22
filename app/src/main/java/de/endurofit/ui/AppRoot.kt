@@ -45,6 +45,11 @@ fun AppRoot() {
         if (files.isNotEmpty()) fitResult = FitImport.import(ctx, files)
     }
 
+    val openFood by Nav.openFood.collectAsState()
+    LaunchedEffect(openFood) {
+        if (openFood) { tab = 2; Nav.openFood.value = false }
+    }
+
     val tabs = listOf("🏠" to "Heute", "❤️" to "Training", "🍽️" to "Essen", "📊" to "Analyse", "👤" to "Profil")
 
     Scaffold(

@@ -51,7 +51,16 @@ class MainActivity : ComponentActivity() {
     /** FIT-Dateien, die aus der Suunto-App geteilt wurden, zum Import vormerken. */
     private fun takeShared(intent: Intent?) {
         val uris = FitImport.urisFrom(intent)
-        if (uris.isNotEmpty()) FitImport.pending.value = FitImport.pending.value + uris
+        if (uris.isNotEmpty()) {
+            FitImport.pending.value = FitImport.pending.value + uris
+            return
+        }
+        // Geteilter Text (z. B. Antwort aus ChatGPT) → Essen aus Text einfügen
+        val text = if (intent?.action == Intent.ACTION_SEND) intent.getStringExtra(Intent.EXTRA_TEXT) else null
+        if (!text.isNullOrBlank()) {
+            de.endurofit.ui.SharedFoodText.text.value = text
+            de.endurofit.ui.Nav.openFood.value = true
+        }
     }
 }
 
