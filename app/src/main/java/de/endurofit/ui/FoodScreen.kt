@@ -93,8 +93,10 @@ fun FoodScreen() {
             Hint("Ziel: 35 ml pro kg Körpergewicht + 0,5 l je Trainingsstunde.", Modifier.padding(top = 4.dp))
         }
 
-        Button(onClick = { prefill = null; dialog = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("+ Essen eintragen")
+        FoodPhotoButtons(day)
+        Spacer(Modifier.height(6.dp))
+        OutlinedButton(onClick = { prefill = null; dialog = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("✏️ Von Hand eintragen")
         }
         Spacer(Modifier.height(8.dp))
 
@@ -116,7 +118,7 @@ fun FoodScreen() {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(Calc.fmtClock(e.t), Modifier.width(52.dp), style = MaterialTheme.typography.bodySmall)
                     Column(Modifier.weight(1f)) {
-                        Text(e.name)
+                        Text((if (e.fromPhoto) "📷 " else "") + e.name)
                         if (e.protein + e.carbs + e.fat > 0) {
                             Hint("E ${Calc.fmtNum(e.protein)} · K ${Calc.fmtNum(e.carbs)} · F ${Calc.fmtNum(e.fat)} g")
                         }

@@ -25,7 +25,14 @@
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
 
+    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+
+    <!-- Internet für Karte und Essensfoto-Analyse -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
@@ -42,10 +49,32 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- FIT-Dateien aus der Suunto-App: "Teilen → EnduroFit" -->
+            <intent-filter android:label="In EnduroFit importieren">
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/vnd.ant.fit" />
+                <data android:mimeType="application/fit" />
+                <data android:mimeType="application/x-fit" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <!-- FIT-Datei antippen, z. B. im Download-Ordner -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/vnd.ant.fit" />
+                <data android:mimeType="application/fit" />
+                <data android:mimeType="application/x-fit" />
             </intent-filter>
         </activity>
 
@@ -68,6 +97,17 @@
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
             </intent-filter>
         </activity-alias>
+
+        <!-- Für Fotos von der Kamera -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <service
             android:name=".hr.HrService"

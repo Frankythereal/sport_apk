@@ -158,17 +158,40 @@ object Calc {
     }.timeInMillis
 
     /**
-     * Trainings eines Tages, ohne doppelte Zählung: Wenn eine Suunto-Aktivität
-     * zeitlich mit einer eigenen Sensor-Aufnahme überlappt, zählt nur die eigene.
+     * Trainings eines Tages, ohne doppelte Zählung: Überschneiden sich zwei Aufnahmen
+     * zu mehr als der Hälfte, zählt nur eine. Vorrang: eigener Sensor, dann FIT-Import,
+     * dann Health Connect.
      */
     fun sessionsOfDay(all: List<Session>, day: Long): List<Session> {
         val end = addDays(day, 1)
         val ofDay = all.filter { it.start in day until end }
-        val own = ofDay.filter { it.source == SOURCE_SENSOR }
-        return ofDay.filter { s ->
-            s.source == SOURCE_SENSOR || own.none { o -> s.start < o.end && o.start < s.end }
-        }
+        return dedupe(ofDay)
     }
+
+    fun priority(s: Session): Int = when {
+        s.source == SOURCE_SENSOR -> 0
+        s.id.startsWith("fit_") -> 1
+        else -> 2
+    }
+
+    fun overlaps(a: Session, b: Session): Boolean {
+        val o = minOf(a.end, b.end) - maxOf(a.start, b.start)
+        val shorter = minOf(a.durationMs, b.durationMs).coerceAtLeast(1)
+        return o > shorter / 2
+    }
+
+    fun dedupe(list: List<Session>): List<Session> {
+        val accepted = ArrayList<Session>()
+        for (s in list.sortedWith(compareBy<Session> { priority(it) }.thenBy { it.start })) {
+            if (accepted.none { overlaps(it, s) }) accepted.add(s)
+        }
+        return accepted.sortedBy { it.start }
+    }
+
+    /** Eine andere Aufnahme zur selben Zeit (z. B. Suunto-GPS zu einer Sensor-Aufnahme). */
+    fun partner(all: List<Session>, s: Session, need: (Session) -> Boolean): Session? =
+        all.filter { it.id != s.id && need(it) && overlaps(it, s) }
+            .maxByOrNull { minOf(it.end, s.end) - maxOf(it.start, s.start) }
 
     // ---------- Formatierung ----------
 

@@ -71,7 +71,8 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit) {
                 "Gehen" to Calc.fmtNum(d.walkKcal),
             )
             Spacer(Modifier.height(10.dp))
-            OutlinedButton(onClick = { showFood = true }) { Text("+ Essen eintragen") }
+            FoodPhotoButtons(today)
+            TextButton(onClick = { showFood = true }) { Text("✏️ Von Hand eintragen") }
         }
 
         // ---------- Tagesziele ----------
@@ -86,7 +87,7 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit) {
                 }
             }
             if (d.steps == 0) {
-                Hint("Schritte und Schlaf kommen von der Uhr über den Suunto-Import.", Modifier.padding(top = 6.dp))
+                Hint("Schritte kommen über Health Connect (Uhr oder Handy). Den Schlaf gibt Suunto nicht weiter – trag ihn morgens kurz ein.", Modifier.padding(top = 6.dp))
             }
             Spacer(Modifier.height(6.dp))
             SuuntoImportSection(compact = true)
@@ -120,6 +121,8 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit) {
                 SleepSummary(s)
             }
         }
+
+        Spo2Card()
 
         // ---------- Training ----------
         SectionCard("Training heute") {

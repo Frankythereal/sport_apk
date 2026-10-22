@@ -1,6 +1,7 @@
 package de.endurofit
 
 import android.app.Application
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import de.endurofit.data.Repo
+import de.endurofit.health.FitImport
 import de.endurofit.ui.AppRoot
 import de.endurofit.ui.EnduroTheme
 
@@ -22,6 +24,12 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         Repo.init(this)
+        // Kartendienst (OpenStreetMap) braucht eine Kennung und einen Zwischenspeicher
+        org.osmdroid.config.Configuration.getInstance().apply {
+            userAgentValue = packageName
+            osmdroidBasePath = java.io.File(cacheDir, "osm")
+            osmdroidTileCache = java.io.File(cacheDir, "osm/tiles")
+        }
     }
 }
 
@@ -29,9 +37,21 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Repo.init(this)
+        takeShared(intent)
         setContent {
             EnduroTheme { AppRoot() }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        takeShared(intent)
+    }
+
+    /** FIT-Dateien, die aus der Suunto-App geteilt wurden, zum Import vormerken. */
+    private fun takeShared(intent: Intent?) {
+        val uris = FitImport.urisFrom(intent)
+        if (uris.isNotEmpty()) FitImport.pending.value = FitImport.pending.value + uris
     }
 }
 

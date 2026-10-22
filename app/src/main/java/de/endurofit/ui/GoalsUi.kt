@@ -141,3 +141,64 @@ fun SleepDialog(wakeDay: Long, onDismiss: () -> Unit) {
         dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
     )
 }
+
+/** Blutsauerstoff: letzter Wert, Verlauf der letzten Tage und Eintragen von Hand. */
+@Composable
+fun Spo2Card() {
+    val all by Repo.spo2.collectAsState()
+    var dialog by remember { mutableStateOf(false) }
+    SectionCard("🩸 Blutsauerstoff (SpO₂)") {
+        val last = all.firstOrNull()
+        if (last == null) {
+            Hint("Noch kein Wert. Die Suunto misst SpO₂ nachts oder auf Knopfdruck, gibt den Wert aber nicht an andere Apps weiter – trag ihn hier kurz von Hand ein.")
+        } else {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("${Calc.fmtNum(last.pct, 0)} %", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = spo2Color(last.pct))
+                Text("  ${Calc.fmtDateTime(last.t)}", Modifier.padding(bottom = 5.dp), style = MaterialTheme.typography.bodySmall)
+            }
+            val week = all.filter { it.t > System.currentTimeMillis() - 7 * 86_400_000L }
+            if (week.size > 1) {
+                Hint("7 Tage: Ø ${Calc.fmtNum(week.map { it.pct }.average(), 1)} % · niedrigster ${Calc.fmtNum(week.minOf { it.pct }, 0)} % (${week.size} Werte)")
+            }
+            Hint(spo2Text(last.pct), Modifier.padding(top = 2.dp))
+        }
+        TextButton(onClick = { dialog = true }) { Text("+ Wert eintragen") }
+    }
+    if (dialog) Spo2Dialog { dialog = false }
+}
+
+fun spo2Color(p: Double): Color = when {
+    p >= 95 -> Good
+    p >= 92 -> Color(0xFFFFA726)
+    else -> Bad
+}
+
+fun spo2Text(p: Double): String = when {
+    p >= 95 -> "Normalbereich (95–100 %)."
+    p >= 92 -> "Leicht niedrig. In der Höhe oder direkt nach dem Aufwachen normal – bleibt es so, ärztlich abklären."
+    else -> "Niedrig. Messung wiederholen (Uhr eng tragen, Arm ruhig halten). Bleibt der Wert unter 92 %, bitte ärztlich abklären."
+}
+
+@Composable
+private fun Spo2Dialog(onDismiss: () -> Unit) {
+    var v by remember { mutableStateOf("") }
+    val pct = Calc.parseNum(v)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Blutsauerstoff eintragen") },
+        text = {
+            Column {
+                NumField("SpO₂ in %", v, { v = it }, Modifier.fillMaxWidth())
+                Hint("Den Wert von der Uhr oder aus der Suunto-App ablesen und hier eintippen.", Modifier.padding(top = 6.dp))
+            }
+        },
+        confirmButton = {
+            Button(enabled = pct != null && pct in 70.0..100.0, onClick = {
+                val now = System.currentTimeMillis()
+                Repo.addSpo2(listOf(de.endurofit.data.Spo2Entry("man_$now", now, pct!!, "manuell")))
+                onDismiss()
+            }) { Text("Speichern") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+    )
+}

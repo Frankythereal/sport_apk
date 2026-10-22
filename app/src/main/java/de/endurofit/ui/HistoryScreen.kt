@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -37,6 +38,7 @@ fun HistoryScreen(selected: String?, onSelect: (String?) -> Unit) {
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), contentPadding = PaddingValues(vertical = 16.dp)) {
         item {
+            FitImportSection(onOpen = { onSelect(it) })
             SuuntoImportSection(compact = true)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 8.dp).horizontalScroll(rememberScrollState())) {
                 FilterChip(selected = filter == null, onClick = { filter = null }, label = { Text("Alle") })
@@ -64,9 +66,15 @@ fun SessionDetail(id: String, onBack: () -> Unit) {
         return
     }
     val maxHr = profile.effectiveMaxHr
-    val peaks = remember(s.samples, maxHr) { Calc.peaks(s.samples, maxHr) }
-    val zones = remember(s.samples, maxHr) { Calc.timeInZones(s.samples, maxHr) }
-    val hardest = remember(s.samples) { Calc.hardestWindow(s.samples) }
+    // Fehlt GPS oder Puls, nimm sie von einer gleichzeitigen Aufnahme (z. B. Suunto-FIT + Verity Sense)
+    val gpsPartner = remember(s, sessions) { if (s.track.size > 1) null else Calc.partner(sessions, s) { it.track.size > 1 } }
+    val track = if (s.track.size > 1) s.track else gpsPartner?.track ?: emptyList()
+    val hrPartner = remember(s, sessions) { if (s.samples.size > 1) null else Calc.partner(sessions, s) { it.samples.size > 1 } }
+    val hr = if (s.samples.size > 1) s.samples else hrPartner?.samples ?: emptyList()
+    val peaks = remember(hr, maxHr) { Calc.peaks(hr, maxHr) }
+    val ranked = peaks.sortedByDescending { it.maxBpm }
+    val zones = remember(hr, maxHr) { Calc.timeInZones(hr, maxHr) }
+    val hardest = remember(hr) { Calc.hardestWindow(hr) }
     var confirmDelete by remember { mutableStateOf(false) }
     var note by remember(s.id) { mutableStateOf(s.note) }
     var title by remember(s.id) { mutableStateOf(s.title) }
@@ -81,7 +89,13 @@ fun SessionDetail(id: String, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         TextButton(onClick = onBack) { Text("← Zurück") }
         Text("${s.type.emoji} ${s.title}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Hint(Calc.fmtDateTime(s.start) + " – " + Calc.fmtClock(s.end) + if (s.source == SOURCE_SUUNTO) " · aus Suunto" else " · eigener Sensor")
+        Hint(
+            Calc.fmtDateTime(s.start) + " – " + Calc.fmtClock(s.end) + when {
+                s.id.startsWith("fit_") -> " · Suunto (FIT)"
+                s.source == SOURCE_SUUNTO -> " · Suunto (Health Connect)"
+                else -> " · Verity Sense"
+            }
+        )
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             SessionType.entries.forEach { t ->
@@ -99,17 +113,49 @@ fun SessionDetail(id: String, onBack: () -> Unit) {
         Spacer(Modifier.height(12.dp))
 
         SectionCard {
+            val avg = if (hr.isEmpty()) 0 else hr.sumOf { it.bpm } / hr.size
             StatRow(
                 "Dauer" to Calc.fmtDuration(s.durationMs),
-                "Ø Puls" to (if (s.avgBpm > 0) "${s.avgBpm}" else "–"),
-                "Max" to (if (s.maxBpm > 0) "${s.maxBpm}" else "–"),
+                "Ø Puls" to (if (avg > 0) "$avg" else "–"),
+                "Max" to (if (hr.isNotEmpty()) "${hr.maxOf { it.bpm }}" else "–"),
                 "kcal" to Calc.fmtNum(s.kcal),
             )
+            val dist = s.distanceM ?: gpsPartner?.distanceM
+            val asc = s.ascentM ?: gpsPartner?.ascentM
+            if (dist != null || asc != null) {
+                Spacer(Modifier.height(8.dp))
+                StatRow(
+                    "Strecke" to (dist?.let { Calc.fmtNum(it / 1000.0, 1) + " km" } ?: "–"),
+                    "Aufstieg" to (asc?.let { Calc.fmtNum(it) + " hm" } ?: "–"),
+                    "Ø Tempo" to (dist?.takeIf { s.durationMs > 0 }?.let { Calc.fmtNum(it / 1000.0 / (s.durationMs / 3_600_000.0), 1) + " km/h" } ?: "–"),
+                )
+            }
+            if (hrPartner != null) Hint("Puls von „${hrPartner.title}“ zur selben Zeit", Modifier.padding(top = 6.dp))
         }
 
-        if (s.samples.size > 1) {
+        if (track.size > 1) {
+            SectionCard("🗺️ Strecke") {
+                TrackMap(track, hr, maxHr, peaks, s.markers)
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    (1..5).forEach { z ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(10.dp).background(zoneColor(z)))
+                            Text(" Z$z", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+                Hint(
+                    "Farbe = Pulszone · rote Nummern = Extrempunkte · ⚑ = deine Markierungen. Marker antippen für Details." +
+                        if (gpsPartner != null) " Strecke von „${gpsPartner.title}“." else "",
+                    Modifier.padding(top = 4.dp)
+                )
+            }
+        }
+
+        if (hr.size > 1) {
             SectionCard("Pulsverlauf") {
-                HrChart(s.samples, maxHr, start = s.start, markers = s.markers, peaks = peaks, height = 200.dp)
+                HrChart(hr, maxHr, start = s.start, markers = s.markers, peaks = peaks, height = 200.dp)
                 Hint("Rot = Extremabschnitte über 90 % HFmax · gestrichelt = deine Markierungen", Modifier.padding(top = 6.dp))
             }
 
@@ -117,8 +163,12 @@ fun SessionDetail(id: String, onBack: () -> Unit) {
                 if (peaks.isEmpty()) {
                     Hint("Keine Abschnitte über 90 % deiner HFmax ($maxHr bpm), die länger als 10 Sekunden dauerten.")
                 } else {
-                    peaks.sortedByDescending { it.maxBpm }.forEach { p ->
+                    ranked.forEachIndexed { i, p ->
                         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "${i + 1}", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(end = 10.dp).background(Bad, androidx.compose.foundation.shape.RoundedCornerShape(4.dp)).padding(horizontal = 7.dp, vertical = 1.dp)
+                            )
                             Column(Modifier.weight(1f)) {
                                 Text("${Calc.fmtTime(p.start)} Uhr", fontWeight = FontWeight.SemiBold)
                                 Hint("${Calc.fmtDuration(p.start - s.start)} nach Start · ${Calc.fmtDuration(p.durationMs)} lang")
@@ -132,7 +182,8 @@ fun SessionDetail(id: String, onBack: () -> Unit) {
                     Text("Härteste Minute: ab ${Calc.fmtTime(hardest.first)} Uhr · Ø ${hardest.second} bpm", fontWeight = FontWeight.SemiBold)
                 }
                 Hint(
-                    "Mit der Uhrzeit findest du die Stelle auf deiner GPS-Strecke in der Suunto-App.",
+                    if (track.size > 1) "Die Nummern findest du auf der Karte oben wieder."
+                    else "Tipp: Exportiere das Training in der Suunto-App als FIT und teile es mit EnduroFit – dann siehst du die Stellen auf der Karte.",
                     Modifier.padding(top = 6.dp)
                 )
             }
@@ -143,7 +194,7 @@ fun SessionDetail(id: String, onBack: () -> Unit) {
         if (s.markers.isNotEmpty()) {
             SectionCard("Markierungen") {
                 s.markers.forEachIndexed { i, m ->
-                    val near = s.samples.minByOrNull { kotlin.math.abs(it.t - m) }
+                    val near = hr.minByOrNull { kotlin.math.abs(it.t - m) }
                     Text("⚑ ${i + 1}: ${Calc.fmtTime(m)} Uhr (${Calc.fmtDuration(m - s.start)} nach Start)" + (near?.let { " · ${it.bpm} bpm" } ?: ""))
                 }
             }

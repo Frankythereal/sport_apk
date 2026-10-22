@@ -9,7 +9,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
+import de.endurofit.ai.FoodVision
 import de.endurofit.data.Repo
+import de.endurofit.health.FitImport
 import de.endurofit.health.SuuntoImport
 
 @Composable
@@ -17,15 +19,30 @@ fun AppRoot() {
     val ctx = LocalContext.current
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var openSession by rememberSaveable { mutableStateOf<String?>(null) }
+    var fitResult by remember { mutableStateOf<FitImport.Result?>(null) }
+    val pending by FitImport.pending.collectAsState()
 
-    // Suunto-Daten beim Start still im Hintergrund nachladen (höchstens alle 15 Minuten)
+    // Daten aus Health Connect still im Hintergrund nachladen (höchstens alle 15 Minuten)
     LaunchedEffect(Unit) {
         try {
-            if (System.currentTimeMillis() - Repo.lastImport > 15 * 60_000L && SuuntoImport.hasPermissions(ctx)) {
+            if (System.currentTimeMillis() - Repo.lastImport > 15 * 60_000L && SuuntoImport.anyPermission(ctx)) {
                 SuuntoImport.import(ctx, days = 7)
             }
         } catch (_: Exception) {
         }
+    }
+
+    // Geteilte Dateien: FIT-Dateien importieren, Fotos zur Essenserkennung schicken
+    LaunchedEffect(pending) {
+        if (pending.isEmpty()) return@LaunchedEffect
+        val uris = pending
+        FitImport.pending.value = emptyList()
+        val (images, files) = uris.partition { ctx.contentResolver.getType(it)?.startsWith("image/") == true }
+        images.firstOrNull()?.let {
+            FoodVision.sharedImage.value = it
+            tab = 2
+        }
+        if (files.isNotEmpty()) fitResult = FitImport.import(ctx, files)
     }
 
     val tabs = listOf("🏠" to "Heute", "❤️" to "Training", "🍽️" to "Essen", "📊" to "Analyse", "👤" to "Profil")
@@ -56,8 +73,16 @@ fun AppRoot() {
                 1 -> TrainingScreen(onSaved = { openSession = it; tab = 3 })
                 2 -> FoodScreen()
                 3 -> AnalysisScreen(selected = openSession, onSelect = { openSession = it })
-                else -> ProfileScreen()
+                else -> ProfileScreen(onOpenSession = { openSession = it; tab = 3 })
             }
         }
+    }
+
+    fitResult?.let { r ->
+        FitResultDialog(
+            r,
+            onOpen = { fitResult = null; openSession = it; tab = 3 },
+            onDismiss = { fitResult = null },
+        )
     }
 }

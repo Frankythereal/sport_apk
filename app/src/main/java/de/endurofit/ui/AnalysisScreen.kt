@@ -362,7 +362,8 @@ private fun SleepCard(sums: List<DaySummary>) {
     val nights = sums.mapNotNull { it.sleep }
     SectionCard("😴 Schlaf") {
         if (nights.isEmpty()) {
-            Hint("Keine Schlafdaten in diesem Zeitraum. Trag die Uhr nachts oder trag den Schlaf unter „Heute“ ein.")
+            Hint("Keine Schlafdaten in diesem Zeitraum. Trag den Schlaf unter „Heute“ ein.")
+            Spo2Summary(sums)
             return@SectionCard
         }
         val avg = nights.sumOf { it.asleepMs } / nights.size
@@ -384,6 +385,7 @@ private fun SleepCard(sums: List<DaySummary>) {
         }
         val avgBed = (bedtimes.sum() / bedtimes.size) % (24 * 60)
         Hint("Ø Einschlafzeit: ${avgBed / 60}:${String.format(java.util.Locale.GERMANY, "%02d", avgBed % 60)} Uhr")
+        Spo2Summary(sums)
     }
 }
 
@@ -454,4 +456,22 @@ private fun daysCsv(sums: List<DaySummary>): String = buildString {
             .append(d.sleep?.let { Calc.fmtNum(it.asleepMs / 3_600_000.0, 1) } ?: "").append(';')
             .append(d.sessions.joinToString(" | ") { "${it.type.label} ${Calc.fmtDuration(it.durationMs)}" }).append('\n')
     }
+}
+
+
+@Composable
+private fun Spo2Summary(sums: List<DaySummary>) {
+    val all by Repo.spo2.collectAsState()
+    if (sums.isEmpty()) return
+    val from = sums.first().day
+    val to = Calc.addDays(sums.last().day, 1)
+    val vals = all.filter { it.t in from until to }
+    if (vals.isEmpty()) return
+    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+    val avg = vals.map { it.pct }.average()
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("🩸 Blutsauerstoff Ø ", fontWeight = FontWeight.SemiBold)
+        Text("${Calc.fmtNum(avg, 1)} %", fontWeight = FontWeight.Bold, color = spo2Color(avg))
+    }
+    Hint("Niedrigster Wert ${Calc.fmtNum(vals.minOf { it.pct }, 0)} % · ${vals.size} Messungen")
 }

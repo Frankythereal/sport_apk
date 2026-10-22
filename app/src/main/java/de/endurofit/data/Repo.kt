@@ -34,6 +34,9 @@ object Repo {
     private val _sleep = MutableStateFlow<List<SleepEntry>>(emptyList())
     val sleep: StateFlow<List<SleepEntry>> = _sleep
 
+    private val _spo2 = MutableStateFlow<List<Spo2Entry>>(emptyList())
+    val spo2: StateFlow<List<Spo2Entry>> = _spo2
+
     private val _goals = MutableStateFlow(Goals())
     val goals: StateFlow<Goals> = _goals
 
@@ -58,6 +61,7 @@ object Repo {
         _water.value = loadList("water.json") { WaterEntry.fromJson(it) }.sortedByDescending { it.t }
         _steps.value = loadList("steps.json") { DaySteps.fromJson(it) }.associateBy { it.day }
         _sleep.value = loadList("sleep.json") { SleepEntry.fromJson(it) }.sortedByDescending { it.end }
+        _spo2.value = loadList("spo2.json") { Spo2Entry.fromJson(it) }.sortedByDescending { it.t }
         val g = File(baseDir, "goals.json")
         if (g.exists()) {
             try { _goals.value = Goals.fromJson(JSONObject(g.readText())) } catch (e: Exception) { Log.w(TAG, "goals.json defekt", e) }
@@ -107,6 +111,21 @@ object Repo {
     fun deleteSleep(id: String) {
         _sleep.value = _sleep.value.filter { it.id != id }
         saveList("sleep.json", _sleep.value) { it.toJson() }
+    }
+
+    // ---------- Blutsauerstoff ----------
+
+    @Synchronized
+    fun addSpo2(list: List<Spo2Entry>) {
+        val ids = list.map { it.id }.toSet()
+        _spo2.value = (_spo2.value.filter { it.id !in ids } + list).sortedByDescending { it.t }
+        saveList("spo2.json", _spo2.value) { it.toJson() }
+    }
+
+    @Synchronized
+    fun deleteSpo2(id: String) {
+        _spo2.value = _spo2.value.filter { it.id != id }
+        saveList("spo2.json", _spo2.value) { it.toJson() }
     }
 
     // ---------- Ziele ----------
@@ -225,6 +244,15 @@ object Repo {
     var onlySuunto: Boolean
         get() = prefs.getBoolean("only_suunto", true)
         set(v) = prefs.edit().putBoolean("only_suunto", v).apply()
+
+    /** Schlüssel für die Claude-API (Essensfotos). Bleibt nur auf dem Handy. */
+    var claudeKey: String
+        get() = prefs.getString("claude_key", "") ?: ""
+        set(v) = prefs.edit().putString("claude_key", v.trim()).apply()
+
+    var claudeModel: String
+        get() = prefs.getString("claude_model", "claude-sonnet-5-5") ?: "claude-sonnet-5-5"
+        set(v) = prefs.edit().putString("claude_model", v).apply()
 
     var lastImport: Long
         get() = prefs.getLong("last_import", 0L)

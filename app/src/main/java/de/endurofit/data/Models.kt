@@ -33,6 +33,9 @@ data class Session(
     val sets: List<GymSet> = emptyList(),
     val kcal: Double = 0.0,
     val note: String = "",
+    val track: List<Fit.Point> = emptyList(),
+    val distanceM: Double? = null,
+    val ascentM: Double? = null,
 ) {
     val durationMs: Long get() = (end - start).coerceAtLeast(0)
     val avgBpm: Int get() = if (samples.isEmpty()) 0 else samples.map { it.bpm }.average().roundToInt()
@@ -52,6 +55,17 @@ data class Session(
             samples.forEach { arr.put(it.t - start); arr.put(it.bpm) }
         })
         put("markers", JSONArray().also { arr -> markers.forEach { arr.put(it) } })
+        // GPS kompakt: [zeit, lat*1e6, lon*1e6, höhe dm (-99999 = keine), ...]
+        if (track.isNotEmpty()) put("track", JSONArray().also { arr ->
+            track.forEach {
+                arr.put(it.t - start)
+                arr.put(Math.round(it.lat * 1e6))
+                arr.put(Math.round(it.lon * 1e6))
+                arr.put(it.alt?.let { a -> Math.round(a * 10) } ?: -99999L)
+            }
+        })
+        distanceM?.let { put("dist", it) }
+        ascentM?.let { put("ascent", it) }
         put("sets", JSONArray().also { arr ->
             sets.forEach {
                 arr.put(JSONObject().apply {
@@ -74,6 +88,14 @@ data class Session(
                 samples.add(HrSample(start + hr.getLong(i), hr.getInt(i + 1)))
                 i += 2
             }
+            val tr = o.optJSONArray("track") ?: JSONArray()
+            val track = ArrayList<Fit.Point>(tr.length() / 4)
+            var j = 0
+            while (j + 3 < tr.length()) {
+                val alt = tr.getLong(j + 3)
+                track.add(Fit.Point(start + tr.getLong(j), tr.getLong(j + 1) / 1e6, tr.getLong(j + 2) / 1e6, if (alt == -99999L) null else alt / 10.0))
+                j += 4
+            }
             val m = o.optJSONArray("markers") ?: JSONArray()
             val markers = (0 until m.length()).map { m.getLong(it) }
             val s = o.optJSONArray("sets") ?: JSONArray()
@@ -93,6 +115,9 @@ data class Session(
                 sets = sets,
                 kcal = o.optDouble("kcal", 0.0),
                 note = o.optString("note", ""),
+                track = track,
+                distanceM = if (o.has("dist")) o.optDouble("dist") else null,
+                ascentM = if (o.has("ascent")) o.optDouble("ascent") else null,
             )
         }
     }
@@ -106,10 +131,12 @@ data class FoodEntry(
     val protein: Double = 0.0,
     val carbs: Double = 0.0,
     val fat: Double = 0.0,
+    val fromPhoto: Boolean = false,
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("t", t); put("name", name); put("kcal", kcal)
         put("protein", protein); put("carbs", carbs); put("fat", fat)
+        if (fromPhoto) put("photo", true)
     }
 
     companion object {
@@ -121,6 +148,7 @@ data class FoodEntry(
             protein = o.optDouble("protein", 0.0),
             carbs = o.optDouble("carbs", 0.0),
             fat = o.optDouble("fat", 0.0),
+            fromPhoto = o.optBoolean("photo", false),
         )
     }
 }
@@ -253,5 +281,15 @@ data class Goals(
             sleepHours = o.optDouble("sleep", 7.5),
             mode = KcalMode.of(o.optString("mode")),
         )
+    }
+}
+
+// ---------- Blutsauerstoff ----------
+
+data class Spo2Entry(val id: String, val t: Long, val pct: Double, val source: String) {
+    fun toJson(): JSONObject = JSONObject().apply { put("id", id); put("t", t); put("pct", pct); put("source", source) }
+
+    companion object {
+        fun fromJson(o: JSONObject) = Spo2Entry(o.getString("id"), o.getLong("t"), o.optDouble("pct"), o.optString("source"))
     }
 }

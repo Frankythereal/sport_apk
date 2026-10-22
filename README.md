@@ -3,6 +3,10 @@
 Eigene Android-Fitness-App für Hard Enduro und Gym.
 
 **Funktionen**
+- **Suunto-Trainings als FIT-Datei** importieren (in der Suunto-App „Teilen → EnduroFit“): Puls, Kalorien, Strecke
+- **Karte** (OpenStreetMap) mit der Strecke nach Pulszone eingefärbt und nummerierten Extrempunkten
+- **Essensfotos erkennen** mit Claude (eigener API-Schlüssel nötig), auch Nährwerttabellen
+- **Blutsauerstoff** aus Health Connect oder von Hand
 - Puls direkt von der **Polar Verity Sense** (Bluetooth), auch bei ausgeschaltetem Bildschirm
 - Pulszonen, **Extrempunkte** (Abschnitte über 90 % HFmax) und härteste Minute je Training
 - Markierungen während der Fahrt setzen (⚑), die später im Diagramm erscheinen

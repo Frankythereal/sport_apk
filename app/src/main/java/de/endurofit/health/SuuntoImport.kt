@@ -7,6 +7,7 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
@@ -21,6 +22,7 @@ import de.endurofit.data.SOURCE_SUUNTO
 import de.endurofit.data.Session
 import de.endurofit.data.SessionType
 import de.endurofit.data.SleepEntry
+import de.endurofit.data.Spo2Entry
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import kotlin.math.max
@@ -42,6 +44,7 @@ object SuuntoImport {
         HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
         HealthPermission.getReadPermission(StepsRecord::class),
         HealthPermission.getReadPermission(SleepSessionRecord::class),
+        HealthPermission.getReadPermission(OxygenSaturationRecord::class),
     )
 
     fun available(ctx: Context): Boolean =
@@ -53,6 +56,12 @@ object SuuntoImport {
         return granted.containsAll(PERMISSIONS)
     }
 
+    /** Mindestens eine Berechtigung erteilt – dann lohnt sich der Import im Hintergrund. */
+    suspend fun anyPermission(ctx: Context): Boolean {
+        if (!available(ctx)) return false
+        return HealthConnectClient.getOrCreate(ctx).permissionController.getGrantedPermissions().any { it in PERMISSIONS }
+    }
+
     private fun isSuunto(pkg: String) = pkg.contains("suunto", true) || pkg.startsWith("com.stt.android")
 
     data class Result(
@@ -61,6 +70,8 @@ object SuuntoImport {
         val skippedOtherApps: Int,
         val stepDays: Int,
         val nights: Int,
+        val spo2: Int,
+        val stepSource: String?,
     )
 
     suspend fun import(ctx: Context, days: Int = 30): Result {
@@ -85,8 +96,14 @@ object SuuntoImport {
         } catch (e: Exception) {
             Log.w(TAG, "Schlaf-Import fehlgeschlagen", e); 0
         }
+        val spo2 = try {
+            importSpo2(ctx, client, range)
+        } catch (e: Exception) {
+            Log.w(TAG, "SpO2-Import fehlgeschlagen", e); 0
+        }
         Repo.lastImport = System.currentTimeMillis()
-        return Result(imported, updated, skipped, stepDays, nights)
+        val todaySource = Repo.steps.value[Calc.dayStart(System.currentTimeMillis())]?.source
+        return Result(imported, updated, skipped, stepDays, nights, spo2, todaySource)
     }
 
     // ---------- Trainings ----------
@@ -131,6 +148,11 @@ object SuuntoImport {
 
             val id = "hc_" + rec.metadata.id
             val existing = Repo.session(id)
+            val probe = Session(id, SessionType.OTHER, "", rec.startTime.toEpochMilli(), rec.endTime.toEpochMilli(), SOURCE_SUUNTO)
+            if (Repo.sessions.value.any { it.id.startsWith("fit_") && Calc.overlaps(it, probe) }) {
+                if (existing != null) Repo.deleteSession(id)
+                continue
+            }
             val guessedType = when (rec.exerciseType) {
                 ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING,
                 ExerciseSessionRecord.EXERCISE_TYPE_WEIGHTLIFTING -> SessionType.GYM
@@ -162,7 +184,8 @@ object SuuntoImport {
     /**
      * Summiert die Schritte je Tag. Schritte während eines Trainings werden für den
      * Kalorienverbrauch herausgerechnet, damit nichts doppelt zählt.
-     * Liefern mehrere Apps Schritte (z. B. Handy und Uhr), wird pro Tag nur eine Quelle genommen.
+     * Liefern mehrere Apps Schritte (z. B. Handy und Uhr), wird pro Tag nur eine Quelle genommen –
+     * bevorzugt die Uhr, sonst die mit den meisten Schritten (z. B. Samsung Health vom Handy).
      */
     private suspend fun importSteps(
         ctx: Context, client: HealthConnectClient, start: Instant, end: Instant, onlySuunto: Boolean,
@@ -183,7 +206,6 @@ object SuuntoImport {
         for (r in records) {
             val pkg = r.metadata.dataOrigin.packageName
             if (pkg == ctx.packageName) continue
-            if (onlySuunto && !isSuunto(pkg)) continue
             val s = r.startTime.toEpochMilli()
             val e = r.endTime.toEpochMilli()
             val dur = max(1L, e - s)
@@ -255,5 +277,69 @@ object SuuntoImport {
             .forEach { Repo.deleteSleep(it.id) }
         Repo.saveSleepBatch(entries)
         return entries.size
+    }
+
+    // ---------- Blutsauerstoff ----------
+
+    private suspend fun importSpo2(ctx: Context, client: HealthConnectClient, range: TimeRangeFilter): Int {
+        val list = ArrayList<Spo2Entry>()
+        var token: String? = null
+        do {
+            val resp = client.readRecords(ReadRecordsRequest(OxygenSaturationRecord::class, range, pageToken = token))
+            resp.records.filter { it.metadata.dataOrigin.packageName != ctx.packageName }.forEach {
+                list.add(Spo2Entry("hc_" + it.metadata.id, it.time.toEpochMilli(), it.percentage.value, it.metadata.dataOrigin.packageName))
+            }
+            token = resp.pageToken
+        } while (token != null)
+        if (list.isNotEmpty()) Repo.addSpo2(list)
+        return list.size
+    }
+
+    // ---------- Diagnose ----------
+
+    data class SourceInfo(val label: String, val pkg: String, val count: Int, val last: Long)
+
+    fun appLabel(ctx: Context, pkg: String): String = when {
+        isSuunto(pkg) -> "Suunto"
+        pkg == "com.sec.android.app.shealth" -> "Samsung Health"
+        pkg == "com.google.android.apps.fitness" -> "Google Fit"
+        pkg.startsWith("com.google.android.apps.healthdata") || pkg == "android" -> "Handy (Android)"
+        else -> try {
+            val pm = ctx.packageManager
+            pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+        } catch (_: Exception) {
+            pkg
+        }
+    }
+
+    /** Zeigt, welche App in den letzten 7 Tagen welche Daten an Health Connect geliefert hat. */
+    suspend fun diagnose(ctx: Context): Map<String, List<SourceInfo>> {
+        val client = HealthConnectClient.getOrCreate(ctx)
+        val granted = client.permissionController.getGrantedPermissions()
+        val range = TimeRangeFilter.between(Instant.now().minus(7, ChronoUnit.DAYS), Instant.now())
+        val out = LinkedHashMap<String, List<SourceInfo>>()
+
+        suspend fun <T : androidx.health.connect.client.records.Record> check(
+            name: String, type: kotlin.reflect.KClass<T>, time: (T) -> Instant,
+        ) {
+            if (HealthPermission.getReadPermission(type) !in granted) {
+                out[name] = listOf(SourceInfo("keine Berechtigung", "", -1, 0)); return
+            }
+            try {
+                val recs = client.readRecords(ReadRecordsRequest(type, range, pageSize = 1000)).records
+                out[name] = recs.groupBy { it.metadata.dataOrigin.packageName }
+                    .filterKeys { it != ctx.packageName }
+                    .map { (pkg, l) -> SourceInfo(appLabel(ctx, pkg), pkg, l.size, l.maxOf { time(it).toEpochMilli() }) }
+                    .sortedByDescending { it.count }
+            } catch (e: Exception) {
+                out[name] = listOf(SourceInfo("Fehler: ${e.message}", "", -1, 0))
+            }
+        }
+        check("Trainings", ExerciseSessionRecord::class) { it.endTime }
+        check("Schritte", StepsRecord::class) { it.endTime }
+        check("Puls", HeartRateRecord::class) { it.endTime }
+        check("Schlaf", SleepSessionRecord::class) { it.endTime }
+        check("Blutsauerstoff", OxygenSaturationRecord::class) { it.time }
+        return out
     }
 }

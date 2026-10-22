@@ -24,10 +24,11 @@ import de.endurofit.data.KcalMode
 import de.endurofit.data.Profile
 import de.endurofit.data.Repo
 import de.endurofit.health.SuuntoImport
+import de.endurofit.ai.FoodVision
 import kotlinx.coroutines.launch
 
 @Composable
-fun ProfileScreen() {
+fun ProfileScreen(onOpenSession: (String) -> Unit = {}) {
     val ctx = LocalContext.current
     val profile by Repo.profile.collectAsState()
     val sessions by Repo.sessions.collectAsState()
@@ -112,7 +113,19 @@ fun ProfileScreen() {
 
         GoalsEditor()
 
-        SectionCard("Suunto-Daten") { SuuntoImportSection(compact = false) }
+        SectionCard("⌚ Suunto-Trainings (FIT)") {
+            Hint("Der zuverlässigste Weg: Trainings direkt aus der Suunto-App teilen. Damit kommen Puls, Kalorien und die GPS-Strecke mit.")
+            Spacer(Modifier.height(8.dp))
+            FitImportSection(onOpen = onOpenSession)
+        }
+
+        SectionCard("Health Connect (Schritte, Blutsauerstoff)") {
+            SuuntoImportSection(compact = false)
+            Spacer(Modifier.height(8.dp))
+            HealthDiagnosis()
+        }
+
+        FoodAiSettings()
 
         SectionCard("Export") {
             Hint("Als CSV-Datei, die sich in Excel oder Google Tabellen öffnen lässt.")
@@ -148,9 +161,11 @@ fun SuuntoImportSection(compact: Boolean) {
             busy = true
             status = try {
                 val r = SuuntoImport.import(ctx)
-                val base = "Trainings: ${r.imported} neu, ${r.updated} aktualisiert · Schritte: ${r.stepDays} Tage · Schlaf: ${r.nights} Nächte"
-                if (r.imported + r.updated + r.stepDays + r.nights == 0 && r.skippedOtherApps == 0)
-                    "Nichts gefunden. Ist in der Suunto-App „In Health Connect speichern“ aktiviert?"
+                val src = r.stepSource?.let { " (heute von ${SuuntoImport.appLabel(ctx, it)})" } ?: ""
+                val base = "Trainings: ${r.imported} neu, ${r.updated} aktualisiert · Schritte: ${r.stepDays} Tage$src · " +
+                    "Schlaf: ${r.nights} Nächte · Blutsauerstoff: ${r.spo2} Werte"
+                if (r.imported + r.updated + r.stepDays + r.nights + r.spo2 == 0 && r.skippedOtherApps == 0)
+                    "Health Connect hat keine Daten geliefert. Unten bei „Health Connect prüfen“ siehst du, welche App was liefert."
                 else base + if (r.skippedOtherApps > 0) " · ${r.skippedOtherApps} Trainings anderer Apps übersprungen" else ""
             } catch (e: Exception) {
                 "Fehler: ${e.message}"
@@ -166,12 +181,12 @@ fun SuuntoImportSection(compact: Boolean) {
 
     if (!compact) {
         Hint(
-            "Holt deine Uhr-Aktivitäten (Puls, Kalorien) der letzten 30 Tage über Health Connect. " +
-                "Dafür in der Suunto-App unter Einstellungen „In Health Connect speichern“ einschalten."
+            "Holt Schritte, Blutsauerstoff, Schlaf und Trainings der letzten 30 Tage aus Health Connect – " +
+                "von der Uhr, und wenn die nichts liefert, die Schritte vom Handy (Samsung Health)."
         )
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Nur Suunto-Daten", Modifier.weight(1f))
+            Text("Trainings nur von Suunto", Modifier.weight(1f))
             Switch(checked = onlySuunto, onCheckedChange = { onlySuunto = it; Repo.onlySuunto = it })
         }
     }
@@ -264,4 +279,53 @@ private fun GoalsEditor() {
                 "Das sind allgemeine Richtwerte – bei Vorerkrankungen besser mit dem Arzt absprechen."
         )
     }
+}
+
+
+/** Zeigt, welche App welche Daten an Health Connect liefert – hilft bei "kommt nichts an". */
+@Composable
+private fun HealthDiagnosis() {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var result by remember { mutableStateOf<Map<String, List<SuuntoImport.SourceInfo>>?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    OutlinedButton(enabled = !busy, onClick = {
+        if (!SuuntoImport.available(ctx)) {
+            error = "Health Connect ist auf diesem Handy nicht verfügbar."
+        } else scope.launch {
+            busy = true
+            error = null
+            result = try { SuuntoImport.diagnose(ctx) } catch (e: Exception) { error = e.message; null }
+            busy = false
+        }
+    }) { Text(if (busy) "Prüfe …" else "🔍 Health Connect prüfen") }
+    error?.let { Hint(it, Modifier.padding(top = 4.dp)) }
+
+    val r = result ?: return
+    Spacer(Modifier.height(8.dp))
+    Text("Daten der letzten 7 Tage:", fontWeight = FontWeight.SemiBold)
+    r.forEach { (type, sources) ->
+        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+            Text(type, Modifier.width(120.dp))
+            Column(Modifier.weight(1f)) {
+                when {
+                    sources.isEmpty() -> Text("– nichts angekommen", color = Bad)
+                    sources.first().count < 0 -> Text(sources.first().label, color = Bad)
+                    else -> sources.forEach {
+                        Text("${it.label}: ${it.count}× · zuletzt ${Calc.fmtDateTime(it.last)}", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+    }
+    val suuntoAny = r.values.flatten().any { it.label == "Suunto" }
+    Spacer(Modifier.height(6.dp))
+    Hint(
+        if (suuntoAny) "Die Suunto-App liefert Daten. Was fehlt, gibt Suunto nicht weiter (Schlaf und Blutsauerstoff teilt Suunto nicht mit Health Connect)."
+        else "Von Suunto kommt nichts an. So prüfst du es: 1) Android-Einstellungen → Health Connect (auf dem Samsung unter „Sicherheit und Datenschutz“ → „Weitere Datenschutzeinstellungen“) → App-Berechtigungen → Suunto → alle Schreibrechte erlauben. " +
+            "2) In der Suunto-App in den Einstellungen nach „Health Connect“ suchen und die Verbindung einschalten. " +
+            "3) Die Suunto-App einmal öffnen und mit der Uhr synchronisieren. Trainings kannst du unabhängig davon immer als FIT-Datei teilen."
+    )
 }
