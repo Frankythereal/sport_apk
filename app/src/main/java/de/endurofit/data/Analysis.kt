@@ -18,6 +18,8 @@ data class DaySummary(
     val sleep: SleepEntry?,
     val sessions: List<Session>,
     val activeMs: Long,
+    /** An diesem Tag war der Krankheitsmodus an */
+    val sick: Boolean = false,
 ) {
     val burned: Double get() = bmr + trainingKcal + walkKcal
     val balance: Double get() = eaten - burned
@@ -89,6 +91,7 @@ object Analysis {
         val st = steps[day]
         val trainingMs = ses.sumOf { it.durationMs }
         val maxHr = p.effectiveMaxHr
+        val sick = Sick.isSickDay(Repo.sick.value, day)
         return DaySummary(
             day = day,
             bmr = Calc.bmr(p),
@@ -99,11 +102,13 @@ object Analysis {
             protein = f.sumOf { it.protein },
             foodCount = f.size,
             waterMl = w,
-            waterGoal = waterGoal(g, p, trainingMs),
+            // Krank: 0,5 l mehr trinken
+            waterGoal = waterGoal(g, p, trainingMs) + if (sick) 500 else 0,
             proteinGoal = proteinGoal(g, p),
             sleep = sleepOfDay(sleep, day),
             sessions = ses,
             activeMs = ses.sumOf { activeMs(it, maxHr) } + walkActiveMs(st?.outsideTraining ?: 0),
+            sick = sick,
         )
     }
 
@@ -114,6 +119,16 @@ object Analysis {
 
     /** Tagesziele. Die Kalorienbilanz wird erst bewertet, wenn der Tag vorbei ist oder du Essen eingetragen hast. */
     fun dayGoals(d: DaySummary, g: Goals): List<GoalCheck> {
+        val list = dayGoalsRaw(d, g)
+        if (!d.sick) return list
+        // Kranktage: Schritte, Eiweiß und Bilanz zählen nicht – nur Trinken und Schlaf
+        return list.map { c ->
+            if (c.emoji == "💧" || c.emoji == "😴") c
+            else c.copy(judged = false, valueText = c.valueText + " · krank", done = false)
+        }
+    }
+
+    private fun dayGoalsRaw(d: DaySummary, g: Goals): List<GoalCheck> {
         val today = Calc.dayStart(System.currentTimeMillis())
         val out = ArrayList<GoalCheck>()
         out.add(
@@ -155,15 +170,20 @@ object Analysis {
         return out
     }
 
-    data class WeekGoals(val activeMs: Long, val strength: Int, val goals: Goals) {
-        val activeDone get() = activeMs >= goals.weeklyActiveMin * 60_000L
-        val strengthDone get() = strength >= goals.weeklyStrength
+    data class WeekGoals(val activeMs: Long, val strength: Int, val goals: Goals, val sickDays: Int = 0) {
+        /** Ziele anteilig verkleinert um die Kranktage der Woche */
+        private val factor get() = ((7 - sickDays).coerceAtLeast(0)) / 7.0
+        val activeTargetMin get() = (goals.weeklyActiveMin * factor).toInt()
+        val strengthTarget get() = Math.round(goals.weeklyStrength * factor).toInt()
+        val activeDone get() = activeMs >= activeTargetMin * 60_000L
+        val strengthDone get() = strength >= strengthTarget
     }
 
     fun week(summaries: List<DaySummary>, g: Goals): WeekGoals = WeekGoals(
         activeMs = summaries.sumOf { it.activeMs },
         strength = summaries.sumOf { d -> d.sessions.count { it.type == SessionType.GYM } },
         goals = g,
+        sickDays = summaries.count { it.sick },
     )
 
     fun fmtInt(v: Int): String = String.format(java.util.Locale.GERMANY, "%,d", v)

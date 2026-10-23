@@ -26,6 +26,8 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit, onO
     val sleep by Repo.sleep.collectAsState()
     val profile by Repo.profile.collectAsState()
     val goals by Repo.goals.collectAsState()
+    // Lesen abonniert Änderungen → neu berechnen, wenn sich der Krankheitsmodus ändert
+    @Suppress("UNUSED_VARIABLE") val sickState = Repo.sick.collectAsState().value
     val live by Recorder.live.collectAsState()
     var showFood by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
@@ -40,6 +42,7 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit, onO
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         ScreenTitle("Heute · " + Calc.fmtDate(today))
+        SickSection()
 
         if (live != null) {
             SectionCard {
@@ -98,17 +101,21 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit, onO
             val activeMin = week.activeMs / 60_000
             GoalRow(
                 GoalCheck(
-                    "🔥", "Aktive Minuten", "$activeMin / ${goals.weeklyActiveMin} min",
-                    (activeMin.toFloat() / goals.weeklyActiveMin).coerceIn(0f, 1f), week.activeDone
+                    "🔥", "Aktive Minuten", "$activeMin / ${week.activeTargetMin} min",
+                    (activeMin.toFloat() / week.activeTargetMin.coerceAtLeast(1)).coerceIn(0f, 1f), week.activeDone
                 )
             )
             GoalRow(
                 GoalCheck(
-                    "🏋️", "Krafttraining", "${week.strength} / ${goals.weeklyStrength}×",
-                    (week.strength.toFloat() / goals.weeklyStrength.coerceAtLeast(1)).coerceIn(0f, 1f), week.strengthDone
+                    "🏋️", "Krafttraining", "${week.strength} / ${week.strengthTarget}×",
+                    (week.strength.toFloat() / week.strengthTarget.coerceAtLeast(1)).coerceIn(0f, 1f), week.strengthDone
                 )
             )
-            Hint("Die WHO empfiehlt mindestens 150 Minuten Bewegung und 2× Krafttraining pro Woche.", Modifier.padding(top = 4.dp))
+            Hint(
+                if (week.sickDays > 0) "Wegen ${week.sickDays} Kranktag(en) sind die Wochenziele anteilig verkleinert."
+                else "Die WHO empfiehlt mindestens 150 Minuten Bewegung und 2× Krafttraining pro Woche.",
+                Modifier.padding(top = 4.dp)
+            )
         }
 
         // ---------- Schlaf ----------

@@ -82,6 +82,7 @@ private fun AnalysisContent(onSelect: (String) -> Unit) {
     val sleep by Repo.sleep.collectAsState()
     val profile by Repo.profile.collectAsState()
     val goals by Repo.goals.collectAsState()
+    val sick by Repo.sick.collectAsState()
 
     var period by rememberSaveable { mutableStateOf(Period.WOCHE) }
     var offset by rememberSaveable { mutableIntStateOf(0) }
@@ -108,7 +109,7 @@ private fun AnalysisContent(onSelect: (String) -> Unit) {
             label = "${Calc.fmtShortDate(start)} – ${Calc.fmtShortDate(end)}"
         }
     }
-    val sums = remember(start, count, sessions, food, water, steps, sleep, profile, goals) {
+    val sums = remember(start, count, sessions, food, water, steps, sleep, profile, goals, sick) {
         Analysis.days(start, count).map { Analysis.day(it, sessions, food, water, steps, sleep, profile, goals) }
     }
 
@@ -351,14 +352,17 @@ private fun GoalsCard(sums: List<DaySummary>, goals: Goals, period: Period) {
         val weeks = (sums.size / 7.0).coerceAtLeast(1.0)
         val activeMin = sums.sumOf { it.activeMs } / 60_000.0
         val strength = sums.sumOf { d -> d.sessions.count { it.type == SessionType.GYM } }
+        val sickDays = sums.count { it.sick }
         if (period == Period.WOCHE) {
-            GoalRow(de.endurofit.data.GoalCheck("🔥", "Aktive Minuten", "${activeMin.toInt()} / ${goals.weeklyActiveMin}", (activeMin / goals.weeklyActiveMin).toFloat().coerceIn(0f, 1f), activeMin >= goals.weeklyActiveMin))
-            GoalRow(de.endurofit.data.GoalCheck("🏋️", "Krafttraining", "$strength / ${goals.weeklyStrength}×", (strength.toFloat() / goals.weeklyStrength.coerceAtLeast(1)).coerceIn(0f, 1f), strength >= goals.weeklyStrength))
+            val w = Analysis.week(sums, goals)
+            GoalRow(de.endurofit.data.GoalCheck("🔥", "Aktive Minuten", "${activeMin.toInt()} / ${w.activeTargetMin}", (activeMin / w.activeTargetMin.coerceAtLeast(1)).toFloat().coerceIn(0f, 1f), w.activeDone))
+            GoalRow(de.endurofit.data.GoalCheck("🏋️", "Krafttraining", "$strength / ${w.strengthTarget}×", (strength.toFloat() / w.strengthTarget.coerceAtLeast(1)).coerceIn(0f, 1f), w.strengthDone))
         } else {
             Text("🔥 Ø aktive Minuten pro Woche: ${Calc.fmtNum(activeMin / weeks)} (Ziel ${goals.weeklyActiveMin})")
             Text("🏋️ Ø Krafttraining pro Woche: ${Calc.fmtNum(strength / weeks, 1)}× (Ziel ${goals.weeklyStrength}×)")
         }
-        Hint("Grün = geschafft · braun = verfehlt · grau = noch offen oder keine Daten", Modifier.padding(top = 6.dp))
+        if (sickDays > 0) Hint("🤒 $sickDays Kranktag(e) – an diesen Tagen zählen nur Trinken und Schlaf.", Modifier.padding(top = 6.dp))
+        Hint("Grün = geschafft · braun = verfehlt · grau = noch offen, krank oder keine Daten", Modifier.padding(top = 6.dp))
     }
 }
 
@@ -409,12 +413,12 @@ private fun DayRow(d: DaySummary, goals: Goals, onSelect: (String) -> Unit) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(Calc.fmtShortDate(d.day), fontWeight = FontWeight.SemiBold)
+                    Text(Calc.fmtShortDate(d.day) + if (d.sick) "  🤒" else "", fontWeight = FontWeight.SemiBold)
                     val parts = ArrayList<String>()
                     d.sessions.groupBy { it.type }.forEach { (t, l) -> parts.add("${t.emoji} ${Calc.fmtDuration(l.sumOf { it.durationMs })}") }
                     if (d.steps > 0) parts.add("🚶 ${Analysis.fmtInt(d.steps)}")
                     if (d.sleep != null) parts.add("😴 ${Calc.fmtHours(d.sleep.asleepMs)}")
-                    Hint(if (parts.isEmpty()) "Ruhetag" else parts.joinToString("  "))
+                    Hint(if (parts.isEmpty()) (if (d.sick) "krank – Pause" else "Ruhetag") else parts.joinToString("  "))
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text("${Calc.fmtNum(d.burned)} kcal", fontWeight = FontWeight.Bold, color = Accent)

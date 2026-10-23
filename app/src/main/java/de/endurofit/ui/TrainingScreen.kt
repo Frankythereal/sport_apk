@@ -176,6 +176,7 @@ fun TrainingScreen(onSaved: (String) -> Unit) {
 
         // ---------- Aufnahme ----------
         val l = live
+        if (l == null) SickTrainingBanner()
         if (l == null) {
             var type by remember { mutableStateOf(SessionType.ENDURO) }
             SectionCard("Neue Aufnahme") {

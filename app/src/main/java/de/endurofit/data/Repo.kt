@@ -40,6 +40,9 @@ object Repo {
     private val _dayHr = MutableStateFlow<Map<Long, DayHr>>(emptyMap())
     val dayHr: StateFlow<Map<Long, DayHr>> = _dayHr
 
+    private val _sick = MutableStateFlow<List<SickPeriod>>(emptyList())
+    val sick: StateFlow<List<SickPeriod>> = _sick
+
     private val _goals = MutableStateFlow(Goals())
     val goals: StateFlow<Goals> = _goals
 
@@ -66,6 +69,7 @@ object Repo {
         _sleep.value = loadList("sleep.json") { SleepEntry.fromJson(it) }.sortedByDescending { it.end }
         _spo2.value = loadList("spo2.json") { Spo2Entry.fromJson(it) }.sortedByDescending { it.t }
         _dayHr.value = loadList("dayhr.json") { DayHr.fromJson(it) }.associateBy { it.day }
+        _sick.value = loadList("sick.json") { SickPeriod.fromJson(it) }.sortedByDescending { it.start }
         val g = File(baseDir, "goals.json")
         if (g.exists()) {
             try { _goals.value = Goals.fromJson(JSONObject(g.readText())) } catch (e: Exception) { Log.w(TAG, "goals.json defekt", e) }
@@ -115,6 +119,20 @@ object Repo {
     fun deleteSleep(id: String) {
         _sleep.value = _sleep.value.filter { it.id != id }
         saveList("sleep.json", _sleep.value) { it.toJson() }
+    }
+
+    // ---------- Krankheitsmodus ----------
+
+    @Synchronized
+    fun saveSick(p: SickPeriod) {
+        _sick.value = (_sick.value.filter { it.id != p.id } + p).sortedByDescending { it.start }
+        saveList("sick.json", _sick.value) { it.toJson() }
+    }
+
+    @Synchronized
+    fun deleteSick(id: String) {
+        _sick.value = _sick.value.filter { it.id != id }
+        saveList("sick.json", _sick.value) { it.toJson() }
     }
 
     // ---------- Herzfrequenz über den Tag ----------
