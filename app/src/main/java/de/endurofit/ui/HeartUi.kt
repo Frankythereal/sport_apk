@@ -52,7 +52,7 @@ fun HeartTodayCard(onHistory: () -> Unit) {
     val d = all[today] ?: all[Calc.addDays(today, -1)]
     SectionCard("❤️ Herzfrequenz") {
         if (d == null) {
-            Hint("Noch keine Pulsdaten über den Tag. Sie kommen von der Uhr über Health Connect (Profil → Suunto-Daten importieren).")
+            Hint("Noch keine Pulsdaten über den Tag. Sie kommen von der Uhr über Health Connect (Profil → Uhr-Daten importieren).")
             return@SectionCard
         }
         if (d.day != today) Hint("Gestern – für heute ist noch nichts angekommen.")

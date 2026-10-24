@@ -132,7 +132,7 @@ fun SessionRow(s: Session, onClick: () -> Unit) {
             Text(s.type.emoji, fontSize = 26.sp, modifier = Modifier.padding(end = 12.dp))
             Column(Modifier.weight(1f)) {
                 Text(s.title, fontWeight = FontWeight.SemiBold)
-                Hint(Calc.fmtDateTime(s.start) + if (s.source == de.endurofit.data.SOURCE_SUUNTO) " · Suunto" else "")
+                Hint(Calc.fmtDateTime(s.start) + if (s.source == de.endurofit.data.SOURCE_SUUNTO) " · Uhr" else "")
                 val parts = mutableListOf(Calc.fmtDuration(s.durationMs))
                 if (s.avgBpm > 0) parts.add("Ø ${s.avgBpm} / max ${s.maxBpm} bpm")
                 if (s.sets.isNotEmpty()) parts.add("${s.sets.size} Sätze")

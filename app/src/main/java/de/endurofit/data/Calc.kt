@@ -188,7 +188,22 @@ object Calc {
         return accepted.sortedBy { it.start }
     }
 
-    /** Eine andere Aufnahme zur selben Zeit (z. B. Suunto-GPS zu einer Sensor-Aufnahme). */
+    /** Strecke in Metern aus GPS-Punkten (null, wenn keine Strecke). */
+    fun trackDistance(track: List<Fit.Point>): Double? {
+        if (track.size < 2) return null
+        var d = 0.0
+        for (i in 1 until track.size) {
+            val a = track[i - 1]; val b = track[i]
+            val dLat = Math.toRadians(b.lat - a.lat)
+            val dLon = Math.toRadians(b.lon - a.lon)
+            val h = Math.sin(dLat / 2).let { it * it } +
+                Math.cos(Math.toRadians(a.lat)) * Math.cos(Math.toRadians(b.lat)) * Math.sin(dLon / 2).let { it * it }
+            d += 2 * 6_371_000.0 * Math.asin(Math.sqrt(h))
+        }
+        return d
+    }
+
+    /** Eine andere Aufnahme zur selben Zeit (z. B. Uhr-GPS zu einer Sensor-Aufnahme). */
     fun partner(all: List<Session>, s: Session, need: (Session) -> Boolean): Session? =
         all.filter { it.id != s.id && need(it) && overlaps(it, s) }
             .maxByOrNull { minOf(it.end, s.end) - maxOf(it.start, s.start) }

@@ -91,8 +91,8 @@ fun SessionDetail(id: String, onBack: () -> Unit) {
         Text("${s.type.emoji} ${s.title}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Hint(
             Calc.fmtDateTime(s.start) + " – " + Calc.fmtClock(s.end) + when {
-                s.id.startsWith("fit_") -> " · Suunto (FIT)"
-                s.source == SOURCE_SUUNTO -> " · Suunto (Health Connect)"
+                s.id.startsWith("fit_") -> " · Uhr (FIT-Datei)"
+                s.source == SOURCE_SUUNTO -> " · Uhr (Health Connect)"
                 else -> " · Verity Sense"
             }
         )
@@ -183,7 +183,7 @@ fun SessionDetail(id: String, onBack: () -> Unit) {
                 }
                 Hint(
                     if (track.size > 1) "Die Nummern findest du auf der Karte oben wieder."
-                    else "Tipp: Exportiere das Training in der Suunto-App als FIT und teile es mit EnduroFit – dann siehst du die Stellen auf der Karte.",
+                    else "Tipp: Mit einer GPS-Strecke der Uhr siehst du die Stellen auf der Karte.",
                     Modifier.padding(top = 6.dp)
                 )
             }
@@ -242,7 +242,7 @@ fun SessionDetail(id: String, onBack: () -> Unit) {
             title = { Text("Training löschen?") },
             text = {
                 Text(
-                    if (s.source == SOURCE_SUUNTO) "Es wird nur hier gelöscht. Beim nächsten Import kommt es wieder, solange es in der Suunto-App ist."
+                    if (s.source == SOURCE_SUUNTO) "Es wird nur hier gelöscht. Beim nächsten Import kommt es wieder, solange es in der App der Uhr ist."
                     else "Das lässt sich nicht rückgängig machen."
                 )
             },

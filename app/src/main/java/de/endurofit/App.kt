@@ -75,7 +75,7 @@ class PrivacyActivity : ComponentActivity() {
                         Text("Datenschutz", style = MaterialTheme.typography.headlineSmall)
                         Text(
                             "EnduroFit liest aus Health Connect nur deine Trainings, Pulsdaten und " +
-                                "Kalorien (z. B. von der Suunto-App), um sie in der App auszuwerten. " +
+                                "Kalorien (z. B. von Polar Flow), um sie in der App auszuwerten. " +
                                 "Alle Daten bleiben ausschließlich auf deinem Handy und werden " +
                                 "nirgendwohin gesendet.",
                             Modifier.padding(top = 12.dp)

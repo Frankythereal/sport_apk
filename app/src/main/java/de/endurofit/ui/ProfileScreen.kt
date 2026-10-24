@@ -85,7 +85,7 @@ fun ProfileScreen(onOpenSession: (String) -> Unit = {}) {
                 NumField("Ruhepuls", restHr, { restHr = it }, Modifier.weight(1f), decimal = false)
             }
             Hint(
-                "Kennst du deinen echten Maximalpuls (z. B. aus einem Rennen oder der Suunto-Uhr), trag ihn ein – " +
+                "Kennst du deinen echten Maximalpuls (z. B. aus einem Rennen oder von der Uhr), trag ihn ein – " +
                     "das macht die Zonen viel genauer.",
                 Modifier.padding(top = 6.dp)
             )
@@ -113,8 +113,8 @@ fun ProfileScreen(onOpenSession: (String) -> Unit = {}) {
 
         GoalsEditor()
 
-        SectionCard("⌚ Suunto-Trainings (FIT)") {
-            Hint("Der zuverlässigste Weg: Trainings direkt aus der Suunto-App teilen. Damit kommen Puls, Kalorien und die GPS-Strecke mit.")
+        SectionCard("📂 Trainings als FIT-Datei") {
+            Hint("Falls deine Uhr keine Daten an Health Connect gibt (z. B. Suunto): Trainings als FIT-Datei aus der Uhren-App teilen. Damit kommen Puls, Kalorien und die GPS-Strecke mit.")
             Spacer(Modifier.height(8.dp))
             FitImportSection(onOpen = onOpenSession)
         }
@@ -176,7 +176,7 @@ fun SuuntoImportSection(compact: Boolean) {
 
     val launcher = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) { granted ->
         if (granted.containsAll(SuuntoImport.PERMISSIONS)) runImport()
-        else status = "Ohne Berechtigung kann ich die Suunto-Daten nicht lesen."
+        else status = "Ohne Berechtigung kann ich die Daten der Uhr nicht lesen."
     }
 
     if (!compact) {
@@ -186,7 +186,7 @@ fun SuuntoImportSection(compact: Boolean) {
         )
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Trainings nur von Suunto", Modifier.weight(1f))
+            Text("Trainings nur von der Uhr (Polar, Suunto, Garmin)", Modifier.weight(1f))
             Switch(checked = onlySuunto, onCheckedChange = { onlySuunto = it; Repo.onlySuunto = it })
         }
     }
@@ -203,7 +203,7 @@ fun SuuntoImportSection(compact: Boolean) {
                     }
                 }
             }
-        }) { Text(if (busy) "Importiere …" else "⌚ Suunto-Daten importieren") }
+        }) { Text(if (busy) "Importiere …" else "⌚ Uhr-Daten importieren") }
         if (busy) CircularProgressIndicator(Modifier.padding(start = 12.dp).size(20.dp), strokeWidth = 2.dp)
     }
     status?.let { Hint(it, Modifier.padding(top = 4.dp)) }
@@ -320,12 +320,12 @@ private fun HealthDiagnosis() {
             }
         }
     }
-    val suuntoAny = r.values.flatten().any { it.label == "Suunto" }
+    val watch = r.values.flatten().firstOrNull { SuuntoImport.isWatch(it.pkg) }?.label
     Spacer(Modifier.height(6.dp))
     Hint(
-        if (suuntoAny) "Die Suunto-App liefert Daten. Was fehlt, gibt Suunto nicht weiter (Schlaf und Blutsauerstoff teilt Suunto nicht mit Health Connect)."
-        else "Von Suunto kommt nichts an. So prüfst du es: 1) Android-Einstellungen → Health Connect (auf dem Samsung unter „Sicherheit und Datenschutz“ → „Weitere Datenschutzeinstellungen“) → App-Berechtigungen → Suunto → alle Schreibrechte erlauben. " +
-            "2) In der Suunto-App in den Einstellungen nach „Health Connect“ suchen und die Verbindung einschalten. " +
-            "3) Die Suunto-App einmal öffnen und mit der Uhr synchronisieren. Trainings kannst du unabhängig davon immer als FIT-Datei teilen."
+        if (watch != null) "Deine Uhr ($watch) liefert Daten. Was oben fehlt, gibt die Uhren-App nicht an Health Connect weiter."
+        else "Von deiner Uhr kommt nichts an. So prüfst du es: 1) In der App der Uhr die Health-Connect-Verbindung einschalten (Polar Flow: Allgemeine Einstellungen → Health Connect). " +
+            "2) Android-Einstellungen → Health Connect → App-Berechtigungen → App der Uhr → alles erlauben. " +
+            "3) Die Uhr einmal mit ihrer App synchronisieren. Trainings kannst du zur Not immer als FIT-Datei teilen."
     )
 }

@@ -150,7 +150,7 @@ fun Spo2Card() {
     SectionCard("🩸 Blutsauerstoff (SpO₂)") {
         val last = all.firstOrNull()
         if (last == null) {
-            Hint("Noch kein Wert. Die Suunto misst SpO₂ nachts oder auf Knopfdruck, gibt den Wert aber nicht an andere Apps weiter – trag ihn hier kurz von Hand ein.")
+            Hint("Noch kein Wert. Er kommt automatisch, wenn deine Uhr ihn an Health Connect weitergibt (z. B. Polar) – sonst hier kurz von Hand eintragen.")
         } else {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text("${Calc.fmtNum(last.pct, 0)} %", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = spo2Color(last.pct))
@@ -189,7 +189,7 @@ private fun Spo2Dialog(onDismiss: () -> Unit) {
         text = {
             Column {
                 NumField("SpO₂ in %", v, { v = it }, Modifier.fillMaxWidth())
-                Hint("Den Wert von der Uhr oder aus der Suunto-App ablesen und hier eintippen.", Modifier.padding(top = 6.dp))
+                Hint("Den Wert von der Uhr oder aus ihrer App ablesen und hier eintippen.", Modifier.padding(top = 6.dp))
             }
         },
         confirmButton = {

@@ -1,7 +1,7 @@
 package de.endurofit.data
 
 /**
- * Liest FIT-Dateien (das Format, das die Suunto-App beim Export eines Trainings erzeugt).
+ * Liest FIT-Dateien (das Format, das Uhren-Apps wie Suunto beim Export eines Trainings erzeugen).
  * Bewusst ohne Fremdbibliothek: es werden nur die Werte gelesen, die die App braucht.
  */
 object Fit {
@@ -253,7 +253,7 @@ object Fit {
             10 -> "Training"; 11 -> "Gehen"; 12 -> "Langlauf"; 13 -> "Ski alpin"
             15 -> "Rudern"; 16 -> "Bergsteigen"; 17 -> "Wandern"; 21 -> "E-Bike"
             22 -> "Motorrad"; 31 -> "Klettern"; 47 -> "Boxen"
-            else -> "Suunto-Training"
+            else -> "Training"
         }
     }
 

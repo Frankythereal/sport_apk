@@ -90,7 +90,7 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit, onO
                 }
             }
             if (d.steps == 0) {
-                Hint("Schritte kommen über Health Connect (Uhr oder Handy). Den Schlaf gibt Suunto nicht weiter – trag ihn morgens kurz ein.", Modifier.padding(top = 6.dp))
+                Hint("Schritte kommen über Health Connect (Uhr oder Handy). Schlaf kommt von der Uhr, wenn sie ihn weitergibt – sonst morgens kurz eintragen.", Modifier.padding(top = 6.dp))
             }
             Spacer(Modifier.height(6.dp))
             SuuntoImportSection(compact = true)

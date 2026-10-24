@@ -27,6 +27,7 @@
 
     <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
     <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_EXERCISE_ROUTES" />
 
     <!-- Internet für Karte und Essensfoto-Analyse -->
     <uses-permission android:name="android.permission.INTERNET" />

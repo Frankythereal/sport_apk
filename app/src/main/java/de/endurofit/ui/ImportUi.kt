@@ -69,7 +69,7 @@ fun FitImportSection(onOpen: (String) -> Unit, showHelp: Boolean = true) {
     }
     if (help) {
         Hint(
-            "In der Suunto-App ein Training öffnen → oben rechts ⋮ → „Training als FIT exportieren“ (bzw. „Teilen“) → " +
+            "In der App deiner Uhr (z. B. Suunto) ein Training öffnen → oben rechts ⋮ → als FIT exportieren bzw. „Teilen“ → " +
                 "EnduroFit auswählen. Gespeicherte .fit-Dateien kannst du auch hier über den Knopf öffnen. " +
                 "Du kannst mehrere Dateien auf einmal wählen; doppelt importierte Trainings werden aktualisiert, nicht verdoppelt.",
             Modifier.padding(top = 4.dp)

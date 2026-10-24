@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.ExerciseRouteResult
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
@@ -17,6 +18,7 @@ import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import de.endurofit.data.Calc
 import de.endurofit.data.DayHr
+import de.endurofit.data.Fit
 import de.endurofit.data.DaySteps
 import de.endurofit.data.HrSample
 import de.endurofit.data.Repo
@@ -32,12 +34,15 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * Holt Daten der Suunto-App aus Health Connect: Trainings (mit Puls und Kalorien),
+ * Holt Daten der Uhr (Polar, Suunto, Garmin …) aus Health Connect: Trainings (mit Puls, Kalorien, GPS),
  * Schritte und Schlaf.
- * Voraussetzung: In der Suunto-App ist "In Health Connect speichern" aktiviert.
+ * Voraussetzung: In der App der Uhr ist die Health-Connect-Verbindung eingeschaltet.
  */
 object SuuntoImport {
     private const val TAG = "SuuntoImport"
+
+    /** GPS-Strecken anderer Apps lesen */
+    const val ROUTE_PERMISSION = "android.permission.health.READ_EXERCISE_ROUTES"
 
     val PERMISSIONS: Set<String> = setOf(
         HealthPermission.getReadPermission(ExerciseSessionRecord::class),
@@ -48,6 +53,7 @@ object SuuntoImport {
         HealthPermission.getReadPermission(SleepSessionRecord::class),
         HealthPermission.getReadPermission(OxygenSaturationRecord::class),
         HealthPermission.getReadPermission(RestingHeartRateRecord::class),
+        ROUTE_PERMISSION,
     )
 
     fun available(ctx: Context): Boolean =
@@ -66,6 +72,11 @@ object SuuntoImport {
     }
 
     private fun isSuunto(pkg: String) = pkg.contains("suunto", true) || pkg.startsWith("com.stt.android")
+    private fun isPolar(pkg: String) = pkg.startsWith("fi.polar")
+    private fun isGarmin(pkg: String) = pkg.startsWith("com.garmin")
+
+    /** Daten von einer Sportuhr (nicht vom Handy) – werden bevorzugt. */
+    fun isWatch(pkg: String) = isSuunto(pkg) || isPolar(pkg) || isGarmin(pkg) || pkg.contains("coros", true)
 
     data class Result(
         val imported: Int,
@@ -135,7 +146,7 @@ object SuuntoImport {
         for (rec in records) {
             val pkg = rec.metadata.dataOrigin.packageName
             if (pkg == ctx.packageName) continue
-            if (onlySuunto && !isSuunto(pkg)) { skipped++; continue }
+            if (onlySuunto && !isWatch(pkg)) { skipped++; continue }
 
             val r = TimeRangeFilter.between(rec.startTime, rec.endTime)
             val origin = setOf(DataOrigin(pkg))
@@ -162,6 +173,18 @@ object SuuntoImport {
                 if (existing != null) Repo.deleteSession(id)
                 continue
             }
+            // GPS-Strecke (z. B. von Polar). Nur lesbar, solange die App offen ist.
+            var track = try {
+                when (val rr = rec.exerciseRouteResult) {
+                    is ExerciseRouteResult.Data -> rr.exerciseRoute.route.map {
+                        Fit.Point(it.time.toEpochMilli(), it.latitude, it.longitude, it.altitude?.inMeters)
+                    }.sortedBy { it.t }
+                    else -> emptyList()
+                }
+            } catch (_: Throwable) {
+                emptyList()
+            }
+            if (track.isEmpty()) track = existing?.track ?: emptyList()
             val guessedType = when (rec.exerciseType) {
                 ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING,
                 ExerciseSessionRecord.EXERCISE_TYPE_WEIGHTLIFTING -> SessionType.GYM
@@ -172,7 +195,7 @@ object SuuntoImport {
                     id = id,
                     // Was du selbst geändert hast (Art, Name, Notiz), bleibt erhalten
                     type = existing?.type ?: guessedType,
-                    title = existing?.title ?: (rec.title?.takeIf { it.isNotBlank() } ?: "Suunto-Aktivität"),
+                    title = existing?.title ?: (rec.title?.takeIf { it.isNotBlank() } ?: (appLabel(ctx, pkg) + "-Training")),
                     start = rec.startTime.toEpochMilli(),
                     end = rec.endTime.toEpochMilli(),
                     source = SOURCE_SUUNTO,
@@ -181,6 +204,9 @@ object SuuntoImport {
                     sets = existing?.sets ?: emptyList(),
                     kcal = kcal,
                     note = existing?.note ?: "",
+                    track = track,
+                    distanceM = existing?.distanceM ?: Calc.trackDistance(track),
+                    ascentM = existing?.ascentM,
                 )
             )
             if (existing == null) imported++ else updated++
@@ -232,7 +258,7 @@ object SuuntoImport {
 
         val list = acc.map { (day, bySource) ->
             val best = bySource.entries.sortedWith(
-                compareByDescending<Map.Entry<String, DoubleArray>> { isSuunto(it.key) }.thenByDescending { it.value[0] }
+                compareByDescending<Map.Entry<String, DoubleArray>> { isWatch(it.key) }.thenByDescending { it.value[0] }
             ).first()
             DaySteps(day, best.value[0].roundToInt(), best.value[1].roundToInt(), best.key)
         }
@@ -258,7 +284,7 @@ object SuuntoImport {
 
         val entries = byNight.values.map { list ->
             val rec = list.sortedWith(
-                compareByDescending<SleepSessionRecord> { isSuunto(it.metadata.dataOrigin.packageName) }
+                compareByDescending<SleepSessionRecord> { isWatch(it.metadata.dataOrigin.packageName) }
                     .thenByDescending { it.endTime.toEpochMilli() - it.startTime.toEpochMilli() }
             ).first()
             var deep = 0L; var light = 0L; var rem = 0L; var awake = 0L
@@ -348,7 +374,7 @@ object SuuntoImport {
             val (pkg, all) = bySource.entries
                 .map { it.key to it.value.filter { s -> s.t in day until next && s.bpm in 25..230 } }
                 .filter { it.second.isNotEmpty() }
-                .sortedWith(compareByDescending<Pair<String, List<HrSample>>> { isSuunto(it.first) }.thenByDescending { it.second.size })
+                .sortedWith(compareByDescending<Pair<String, List<HrSample>>> { isWatch(it.first) }.thenByDescending { it.second.size })
                 .firstOrNull() ?: continue
             val sorted = all.sortedBy { it.t }
             val buckets = sorted.groupBy { (it.t - day) / 300_000 }
@@ -388,6 +414,8 @@ object SuuntoImport {
 
     fun appLabel(ctx: Context, pkg: String): String = when {
         isSuunto(pkg) -> "Suunto"
+        isPolar(pkg) -> "Polar"
+        isGarmin(pkg) -> "Garmin"
         pkg == "com.sec.android.app.shealth" -> "Samsung Health"
         pkg == "com.google.android.apps.fitness" -> "Google Fit"
         pkg.startsWith("com.google.android.apps.healthdata") || pkg == "android" -> "Handy (Android)"
