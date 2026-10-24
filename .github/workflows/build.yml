@@ -27,7 +27,20 @@ jobs:
           gradle-version: "8.10.2"
 
       - name: APK bauen
-        run: gradle :app:assembleDebug --stacktrace
+        run: |
+          set -o pipefail
+          gradle :app:assembleDebug 2>&1 | tee build.log
+
+      - name: Fehler anzeigen
+        if: failure()
+        run: |
+          # Kompilierfehler als Hinweise ausgeben (lesbar über die GitHub-API)
+          grep -E "^e: |What went wrong|Could not|error:" -A4 build.log | head -60 > errors.txt || true
+          split -l 12 errors.txt part_
+          for f in part_*; do
+            msg=$(sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g' "$f")
+            echo "::error::$msg"
+          done
 
       - name: APK umbenennen
         run: cp app/build/outputs/apk/debug/app-debug.apk EnduroFit.apk
