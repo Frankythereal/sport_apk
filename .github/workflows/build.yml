@@ -35,7 +35,7 @@ jobs:
         if: failure()
         run: |
           # Kompilierfehler als Hinweise ausgeben (lesbar über die GitHub-API)
-          grep -E "^e: |What went wrong|Could not|error:" -A4 build.log | head -60 > errors.txt || true
+          grep -E "^e: |What went wrong|Could not|error:|Dependency|requires" -A6 build.log | head -80 > errors.txt || true
           split -l 12 errors.txt part_
           for f in part_*; do
             msg=$(sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g' "$f")
