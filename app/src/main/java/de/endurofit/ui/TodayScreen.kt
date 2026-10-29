@@ -42,6 +42,22 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit, onO
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         ScreenTitle("Heute · " + Calc.fmtDate(today))
+        run {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val running by de.endurofit.AutoSync.running.collectAsState()
+            val last by de.endurofit.AutoSync.lastRun.collectAsState()
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
+                Hint(
+                    when {
+                        running -> "🔄 Aktualisiere Daten von der Uhr …"
+                        last > 0 -> "Aktualisiert um ${Calc.fmtClock(last)} Uhr"
+                        else -> ""
+                    },
+                    Modifier.weight(1f)
+                )
+                TextButton(enabled = !running, onClick = { de.endurofit.AutoSync.onAppVisible(ctx, force = true) }) { Text("↻ Aktualisieren") }
+            }
+        }
         SickSection()
 
         if (live != null) {

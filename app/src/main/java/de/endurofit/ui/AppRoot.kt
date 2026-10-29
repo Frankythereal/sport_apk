@@ -3,6 +3,8 @@ package de.endurofit.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.zIndex
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -22,22 +24,16 @@ fun AppRoot() {
     var fitResult by remember { mutableStateOf<FitImport.Result?>(null) }
     val pending by FitImport.pending.collectAsState()
 
-    // Daten aus Health Connect still im Hintergrund nachladen (höchstens alle 15 Minuten)
-    LaunchedEffect(Unit) {
-        try {
-            if (System.currentTimeMillis() - Repo.lastImport > 15 * 60_000L && SuuntoImport.anyPermission(ctx)) {
-                SuuntoImport.import(ctx, days = 7)
-            }
-        } catch (_: Exception) {
+    // Bei jedem Öffnen bzw. Zurückkehren in die App automatisch synchronisieren
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) de.endurofit.AutoSync.onAppVisible(ctx)
         }
-        // Danach Polar direkt – liefert 24/7-Puls, Erholung und Trainings mit GPS
-        try {
-            if (de.endurofit.polar.PolarApi.connected && System.currentTimeMillis() - Repo.polarLastSync > 15 * 60_000L) {
-                de.endurofit.polar.PolarApi.sync(ctx, days = 3)
-            }
-        } catch (_: Exception) {
-        }
+        lifecycle.addObserver(obs)
+        onDispose { lifecycle.removeObserver(obs) }
     }
+    val syncing by de.endurofit.AutoSync.running.collectAsState()
 
     // Geteilte Dateien: FIT-Dateien importieren, Fotos zur Essenserkennung schicken
     LaunchedEffect(pending) {
@@ -77,6 +73,9 @@ fun AppRoot() {
         }
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
+            if (syncing) {
+                LinearProgressIndicator(Modifier.fillMaxWidth().align(androidx.compose.ui.Alignment.TopCenter).zIndex(1f))
+            }
             when (tab) {
                 0 -> TodayScreen(
                     onOpenTraining = { tab = 1 },
