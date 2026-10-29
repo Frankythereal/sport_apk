@@ -159,7 +159,8 @@ fun RecoveryCard() {
     val cardio by Repo.cardio.collectAsState()
     val today = Calc.dayStart(System.currentTimeMillis())
     val r = rec[today] ?: rec[Calc.addDays(today, -1)]
-    val c = (0..3).firstNotNullOfOrNull { cardio[Calc.addDays(today, -it)] }
+    // "Nicht verfügbar" (Polar braucht erst eine Trainingshistorie) wie fehlend behandeln
+    val c = (0..3).firstNotNullOfOrNull { cardio[Calc.addDays(today, -it)]?.takeIf { cl -> cardioText(cl.status) != null } }
     if (r == null && c == null) return
 
     SectionCard("🔋 Erholung") {

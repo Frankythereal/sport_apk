@@ -67,7 +67,14 @@ fun HeartTodayCard(onHistory: () -> Unit) {
 private fun HeartStats(d: DayHr, base: Double?) {
     Row(verticalAlignment = Alignment.Bottom) {
         Text(d.resting?.toString() ?: "–", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = RestColor)
-        Text(" bpm Ruhepuls" + if (d.resting != null && !d.restingMeasured) " (geschätzt)" else "", Modifier.padding(bottom = 6.dp))
+        Text(
+            when {
+                d.resting == null -> " Ruhepuls – kommt nach der ersten Nacht mit der Uhr"
+                !d.restingMeasured -> " bpm Ruhepuls (geschätzt)"
+                else -> " bpm Ruhepuls"
+            },
+            Modifier.padding(bottom = 6.dp)
+        )
     }
     StatRow("Niedrigster" to "${d.min}", "Ø Tag" to "${d.avg}", "Höchster" to "${d.max}")
     val r = d.resting

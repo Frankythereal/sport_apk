@@ -17,7 +17,9 @@ object DayHrBuilder {
         if (requireFullDay && buckets.size < MIN_BUCKETS) return null
         // Ruhigste 30 Minuten (6 aufeinanderfolgende 5-Minuten-Werte) als Schätzung
         var est: Int? = null
-        if (buckets.size >= 6) {
+        // Ruhepuls nur schätzen, wenn auch Nachtwerte da sind (sonst ist der ruhigste Moment z. B. nur der Nachmittag)
+        val hasNight = buckets.any { it.t - day < 7 * 3_600_000L }
+        if (buckets.size >= 6 && hasNight) {
             for (i in 0..buckets.size - 6) {
                 val win = buckets.subList(i, i + 6)
                 if (win.last().t - win.first().t > 40 * 60_000) continue
