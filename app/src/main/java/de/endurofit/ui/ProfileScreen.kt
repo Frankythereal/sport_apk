@@ -114,6 +114,7 @@ fun ProfileScreen(onOpenSession: (String) -> Unit = {}) {
         GoalsEditor()
 
         PolarSettings()
+        WatchBodyCard()
 
         SectionCard("📂 Trainings als FIT-Datei") {
             Hint("Falls deine Uhr keine Daten an Health Connect gibt (z. B. Suunto): Trainings als FIT-Datei aus der Uhren-App teilen. Damit kommen Puls, Kalorien und die GPS-Strecke mit.")

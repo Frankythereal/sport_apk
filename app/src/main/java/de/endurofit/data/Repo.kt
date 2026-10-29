@@ -47,6 +47,15 @@ object Repo {
     private val _cardio = MutableStateFlow<Map<Long, CardioLoad>>(emptyMap())
     val cardio: StateFlow<Map<Long, CardioLoad>> = _cardio
 
+    private val _skin = MutableStateFlow<Map<Long, SkinTemp>>(emptyMap())
+    val skin: StateFlow<Map<Long, SkinTemp>> = _skin
+
+    private val _ecg = MutableStateFlow<List<Ecg>>(emptyList())
+    val ecg: StateFlow<List<Ecg>> = _ecg
+
+    private val _watchBody = MutableStateFlow(WatchBody())
+    val watchBody: StateFlow<WatchBody> = _watchBody
+
     private val _sick = MutableStateFlow<List<SickPeriod>>(emptyList())
     val sick: StateFlow<List<SickPeriod>> = _sick
 
@@ -79,6 +88,11 @@ object Repo {
         _sick.value = loadList("sick.json") { SickPeriod.fromJson(it) }.sortedByDescending { it.start }
         _recovery.value = loadList("recovery.json") { Recovery.fromJson(it) }.associateBy { it.day }
         _cardio.value = loadList("cardio.json") { CardioLoad.fromJson(it) }.associateBy { it.day }
+        _skin.value = loadList("skin.json") { SkinTemp.fromJson(it) }.associateBy { it.day }
+        _ecg.value = loadList("ecg.json") { Ecg.fromJson(it) }.sortedByDescending { it.t }
+        File(baseDir, "watchbody.json").takeIf { it.exists() }?.let {
+            try { _watchBody.value = WatchBody.fromJson(JSONObject(it.readText())) } catch (_: Exception) {}
+        }
         val g = File(baseDir, "goals.json")
         if (g.exists()) {
             try { _goals.value = Goals.fromJson(JSONObject(g.readText())) } catch (e: Exception) { Log.w(TAG, "goals.json defekt", e) }
@@ -143,6 +157,47 @@ object Repo {
         _cardio.value = _cardio.value + list.associateBy { it.day }
         saveList("cardio.json", _cardio.value.values.sortedBy { it.day }) { it.toJson() }
     }
+
+    @Synchronized
+    fun putSkin(list: List<SkinTemp>) {
+        _skin.value = _skin.value + list.associateBy { it.day }
+        saveList("skin.json", _skin.value.values.sortedBy { it.day }) { it.toJson() }
+    }
+
+    @Synchronized
+    fun putEcg(list: List<Ecg>) {
+        val ids = list.map { it.id }.toSet()
+        _ecg.value = (_ecg.value.filter { it.id !in ids } + list).sortedByDescending { it.t }
+        saveList("ecg.json", _ecg.value) { it.toJson() }
+    }
+
+    /** Neue Körperwerte von der Uhr; übernimmt sie ins Profil, wenn das eingeschaltet ist. */
+    @Synchronized
+    fun putWatchBody(b: WatchBody) {
+        val merged = WatchBody(
+            maxHr = b.maxHr ?: _watchBody.value.maxHr,
+            restHr = b.restHr ?: _watchBody.value.restHr,
+            weightKg = b.weightKg ?: _watchBody.value.weightKg,
+            vo2max = b.vo2max ?: _watchBody.value.vo2max,
+            updated = System.currentTimeMillis(),
+        )
+        _watchBody.value = merged
+        writeAtomic(File(baseDir, "watchbody.json"), merged.toJson().toString())
+        if (useWatchBody) {
+            val p = _profile.value
+            val np = p.copy(
+                maxHr = merged.maxHr?.takeIf { it in 120..230 } ?: p.maxHr,
+                restHr = merged.restHr?.takeIf { it in 30..110 } ?: p.restHr,
+                weightKg = merged.weightKg?.takeIf { it in 30.0..250.0 } ?: p.weightKg,
+            )
+            if (np != p) saveProfile(np)
+        }
+    }
+
+    /** Körperwerte der Uhr automatisch ins Profil übernehmen */
+    var useWatchBody: Boolean
+        get() = prefs.getBoolean("use_watch_body", true)
+        set(v) = prefs.edit().putBoolean("use_watch_body", v).apply()
 
     // Zugangsdaten für Polar AccessLink (bleiben nur auf dem Handy)
     var polarClientId: String

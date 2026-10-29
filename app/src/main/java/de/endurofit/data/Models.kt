@@ -387,3 +387,59 @@ data class CardioLoad(
         )
     }
 }
+
+// ---------- Polar Elixir: Hauttemperatur und EKG, Körperwerte ----------
+
+/** Hauttemperatur im Schlaf. [deviation] = Abweichung von deinem persönlichen Normalwert in °C. */
+data class SkinTemp(val day: Long, val deviation: Double?, val celsius: Double?) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("day", day); deviation?.let { put("dev", it) }; celsius?.let { put("c", it) }
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject) = SkinTemp(
+            o.getLong("day"),
+            if (o.has("dev")) o.getDouble("dev") else null,
+            if (o.has("c")) o.getDouble("c") else null,
+        )
+    }
+}
+
+data class Ecg(val id: String, val t: Long, val hr: Int?, val hrv: Double?, val result: String?) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id); put("t", t); hr?.let { put("hr", it) }; hrv?.let { put("hrv", it) }; result?.let { put("res", it) }
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject) = Ecg(
+            o.getString("id"), o.getLong("t"),
+            if (o.has("hr")) o.getInt("hr") else null,
+            if (o.has("hrv")) o.getDouble("hrv") else null,
+            if (o.has("res")) o.getString("res") else null,
+        )
+    }
+}
+
+/** Körperwerte aus den Einstellungen bzw. Tests der Uhr. */
+data class WatchBody(
+    val maxHr: Int? = null,
+    val restHr: Int? = null,
+    val weightKg: Double? = null,
+    val vo2max: Double? = null,
+    val updated: Long = 0,
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        maxHr?.let { put("max", it) }; restHr?.let { put("rest", it) }; weightKg?.let { put("w", it) }
+        vo2max?.let { put("vo2", it) }; put("upd", updated)
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject) = WatchBody(
+            if (o.has("max")) o.getInt("max") else null,
+            if (o.has("rest")) o.getInt("rest") else null,
+            if (o.has("w")) o.getDouble("w") else null,
+            if (o.has("vo2")) o.getDouble("vo2") else null,
+            o.optLong("upd"),
+        )
+    }
+}

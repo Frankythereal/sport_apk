@@ -161,7 +161,7 @@ fun RecoveryCard() {
     val r = rec[today] ?: rec[Calc.addDays(today, -1)]
     // "Nicht verfügbar" (Polar braucht erst eine Trainingshistorie) wie fehlend behandeln
     val c = (0..3).firstNotNullOfOrNull { cardio[Calc.addDays(today, -it)]?.takeIf { cl -> cardioText(cl.status) != null } }
-    if (r == null && c == null) return
+    if (r == null && c == null && Repo.skin.value.isEmpty()) return
 
     SectionCard("🔋 Erholung") {
         if (r != null) {
@@ -191,6 +191,19 @@ fun RecoveryCard() {
                 )
             }
             r.ansCharge?.let { Hint("ANS-Charge (Nervensystem): ${if (it >= 0) "+" else ""}${Calc.fmtNum(it, 1)} (Skala −10 bis +10)") }
+        }
+        val skin by Repo.skin.collectAsState()
+        (skin[today] ?: skin[Calc.addDays(today, -1)])?.let { st ->
+            val dev = st.deviation
+            Hint(
+                "🌡️ Hauttemperatur im Schlaf: " + when {
+                    dev != null -> "${if (dev >= 0) "+" else "−"}${Calc.fmtNum(kotlin.math.abs(dev), 1)} °C zu deinem Normalwert" +
+                        if (dev >= 0.5) " – erhöht" else ""
+                    st.celsius != null -> "${Calc.fmtNum(st.celsius, 1)} °C"
+                    else -> "–"
+                },
+                Modifier.padding(top = 2.dp)
+            )
         }
         val ct = c?.let { cardioText(it.status) }
         if (c != null && ct != null) {
@@ -254,5 +267,57 @@ fun HrvTrendCard(days: List<Long>) {
             drawPath(path, Color(0xFF26C6DA), style = Stroke(width = 2.5f))
         }
         Hint("Höhere HRV = besser erholt. Vergleiche nur mit deinen eigenen Werten.", Modifier.padding(top = 4.dp))
+    }
+}
+
+
+// ------------------------------------------------------------------ Körperwerte von der Uhr (Profil)
+
+@Composable
+fun WatchBodyCard() {
+    val body by Repo.watchBody.collectAsState()
+    var auto by remember { mutableStateOf(Repo.useWatchBody) }
+    if (body.updated == 0L) return
+    SectionCard("⌚ Werte von der Uhr") {
+        StatRow(
+            "Max. Puls" to (body.maxHr?.toString() ?: "–"),
+            "Ruhepuls" to (body.restHr?.toString() ?: "–"),
+            "Gewicht" to (body.weightKg?.let { Calc.fmtNum(it, 1) + " kg" } ?: "–"),
+            "VO2max" to (body.vo2max?.let { Calc.fmtNum(it, 0) } ?: "–"),
+        )
+        Hint("Stand ${Calc.fmtDateTime(body.updated)} · VO2max misst die Uhr über den Fitnesstest (höher = fitter).", Modifier.padding(top = 4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+            Text("Automatisch ins Profil übernehmen", Modifier.weight(1f))
+            Switch(checked = auto, onCheckedChange = {
+                auto = it
+                Repo.useWatchBody = it
+                if (it) Repo.putWatchBody(body)
+            })
+        }
+        Hint("Max. Puls und Ruhepuls bestimmen deine Pulszonen, das Gewicht die Kalorien.")
+    }
+}
+
+// ------------------------------------------------------------------ EKG-Liste (Herz-Ansicht)
+
+@Composable
+fun EcgCard() {
+    val list by Repo.ecg.collectAsState()
+    if (list.isEmpty()) return
+    SectionCard("📈 EKG-Messungen (Polar)") {
+        list.take(10).forEach { e ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(Calc.fmtDateTime(e.t), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                Text(
+                    listOfNotNull(e.hr?.let { "$it bpm" }, e.hrv?.let { "HRV ${it.roundToInt()} ms" }).joinToString(" · "),
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            e.result?.let { Hint(it.replace('_', ' ').lowercase()) }
+        }
+        Hint(
+            "Das EKG der Uhr ist kein medizinisches Gerät. Bei Herzstolpern, Schwindel oder Brustschmerz bitte ärztlich abklären lassen.",
+            Modifier.padding(top = 4.dp)
+        )
     }
 }

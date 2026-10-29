@@ -14,6 +14,9 @@ import de.endurofit.data.Recovery
 import de.endurofit.data.Repo
 import de.endurofit.data.SessionType
 import de.endurofit.data.SleepEntry
+import de.endurofit.data.SkinTemp
+import de.endurofit.data.Ecg
+import de.endurofit.data.WatchBody
 import de.endurofit.health.FitImport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -185,6 +188,7 @@ object PolarApi {
 
     fun describe(r: Result): String =
         "✅ Trainings: ${r.trainings} · 24/7-Puls: ${r.hrDays} Tage · Erholung: ${r.recoveries} · Schlaf: ${r.nights} · Belastung: ${r.cardio}" +
+            " · Hauttemperatur: ${r.skin} · EKG: ${r.ecg}" + (if (r.body) " · Körperwerte aktualisiert" else "") +
             if (r.errors.isNotEmpty()) "\n⚠️ " + r.errors.joinToString("\n⚠️ ") else ""
 
     /** Code gegen Zugangsschlüssel tauschen und Nutzer registrieren. */
@@ -241,6 +245,7 @@ object PolarApi {
     data class Result(
         val trainings: Int, val hrDays: Int, val recoveries: Int, val nights: Int, val cardio: Int,
         val errors: List<String>,
+        val skin: Int = 0, val ecg: Int = 0, val body: Boolean = false,
     )
 
     suspend fun sync(ctx: Context?, days: Int = 7): Result = withContext(Dispatchers.IO) {
@@ -259,11 +264,14 @@ object PolarApi {
         val cardio = step("Cardio Load") { syncCardio() } ?: 0
         val hr = step("24/7-Puls") { syncContinuousHr(days) } ?: 0
         val ex = step("Trainings") { syncExercises() } ?: 0
+        val skin = step("Hauttemperatur") { syncSkinTemp(maxOf(days, 14)) } ?: 0
+        val ecg = step("EKG") { syncEcg(28) } ?: 0
+        val body = step("Körperwerte") { syncPhysical() } ?: false
 
         Repo.polarLastSync = System.currentTimeMillis()
         if (debug.length > 50_000) debug.setLength(0)
         try { debugFile().writeText(debug.toString()) } catch (_: Exception) {}
-        Result(ex, hr, rec, nights, cardio, errors)
+        Result(ex, hr, rec, nights, cardio, errors, skin, ecg, body)
     }
 
     private fun syncRecharge(): Int {
@@ -404,6 +412,134 @@ object PolarApi {
         }
         doneFile.writeText(done.joinToString("\n"))
         return n
+    }
+
+    // ---------- Elixir: Hauttemperatur, EKG ----------
+
+    /**
+     * Polar-Elixir-Daten haben je nach Endpunkt leicht andere Feldnamen. Deshalb wird hier tolerant
+     * gelesen: alle Objekte einer Antwort einsammeln und passende Felder über ihren Namen finden.
+     */
+    private fun objects(body: ByteArray): List<JSONObject> {
+        val txt = String(body).trim()
+        if (txt.isEmpty()) return emptyList()
+        val out = ArrayList<JSONObject>()
+        fun collect(arr: JSONArray) { for (i in 0 until arr.length()) arr.optJSONObject(i)?.let { out.add(it) } }
+        if (txt.startsWith("[")) collect(JSONArray(txt)) else {
+            val o = JSONObject(txt)
+            val keys = o.keys().asSequence().toList()
+            val arrays = keys.mapNotNull { o.optJSONArray(it) }
+            if (arrays.isEmpty()) out.add(o) else arrays.forEach { collect(it) }
+        }
+        return out
+    }
+
+    private fun num(o: JSONObject, vararg parts: String, exclude: String? = null): Double? {
+        for (k in o.keys()) {
+            val lk = k.lowercase()
+            if (parts.all { it in lk } && (exclude == null || exclude !in lk)) {
+                val v = o.opt(k)
+                if (v is Number) return v.toDouble()
+                if (v is String) v.toDoubleOrNull()?.let { return it }
+            }
+        }
+        return null
+    }
+
+    /** Zeitpunkt aus Feldern wie "date", "sleep_date", "test_time" (ISO-Datum, ISO-Zeit oder Epoch). */
+    private fun timeOf(o: JSONObject): Long? {
+        val keys = o.keys().asSequence().toList()
+        for (k in keys.sortedBy { if ("date" in it.lowercase()) 0 else 1 }) {
+            val lk = k.lowercase()
+            if ("date" !in lk && "time" !in lk) continue
+            if ("zone" in lk || "offset" in lk || "duration" in lk) continue
+            val v = o.opt(k)
+            try {
+                when {
+                    v is Number && v.toLong() > 1_000_000_000_000L -> return v.toLong()
+                    v is Number && v.toLong() > 1_000_000_000L -> return v.toLong() * 1000
+                    v is String && v.length == 10 -> return dayOf(v)
+                    v is String && v.length > 10 -> return try {
+                        OffsetDateTime.parse(v).toInstant().toEpochMilli()
+                    } catch (_: Exception) {
+                        java.time.LocalDateTime.parse(v.take(19)).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
+        return null
+    }
+
+    private fun range(days: Int): String {
+        val to = LocalDate.now()
+        return "from=${to.minusDays(days.toLong() - 1)}&to=$to"
+    }
+
+    private fun syncSkinTemp(days: Int): Int {
+        val (c, b) = get("/v3/users/biosensing/skintemperature?${range(days)}")
+        if (c !in 200..299) return 0
+        val list = objects(b).mapNotNull { o ->
+            val t = timeOf(o) ?: return@mapNotNull null
+            val dev = num(o, "deviation") ?: num(o, "baseline", exclude = "baseline_")
+            val abs = num(o, "temperature", exclude = "deviation") ?: num(o, "celsius", exclude = "deviation")
+            if (dev == null && abs == null) null else SkinTemp(Calc.dayStart(t), dev, abs)
+        }
+        if (list.isNotEmpty()) Repo.putSkin(list)
+        return list.size
+    }
+
+    private fun syncEcg(days: Int): Int {
+        val (c, b) = get("/v3/users/biosensing/ecg?${range(days)}")
+        if (c !in 200..299) return 0
+        val list = objects(b).mapNotNull { o ->
+            val t = timeOf(o) ?: return@mapNotNull null
+            Ecg(
+                id = "polar_ecg_$t",
+                t = t,
+                hr = (num(o, "average", "heart") ?: num(o, "heart_rate", exclude = "variab"))?.toInt(),
+                hrv = num(o, "variability") ?: num(o, "hrv"),
+                result = o.keys().asSequence().firstOrNull { k -> "class" in k.lowercase() || "result" in k.lowercase() || "status" in k.lowercase() }
+                    ?.let { o.optString(it) }?.takeIf { it.isNotBlank() && it.length < 60 },
+            )
+        }
+        if (list.isNotEmpty()) Repo.putEcg(list)
+        return list.size
+    }
+
+    // ---------- Körperwerte (max. Puls, Ruhepuls, Gewicht, VO2max) ----------
+
+    /** Läuft über "Transaktionen": Polar liefert nur neue Werte, die man danach bestätigt. */
+    private fun syncPhysical(): Boolean {
+        val uid = Repo.polarUserId.ifBlank { return false }
+        val (c, b) = http("POST", "$API/v3/users/$uid/physical-information-transactions", "", "application/json")
+        log("POST physical-information-transactions → $c ${String(b).take(300)}")
+        if (c == 204 || c !in 200..299) return false
+        val tid = JSONObject(String(b)).opt("transaction-id")?.toString() ?: return false
+        val (lc, lb) = get("/v3/users/$uid/physical-information-transactions/$tid")
+        var newest: JSONObject? = null
+        if (lc in 200..299) {
+            val urls = JSONObject(String(lb)).optJSONArray("physical-informations") ?: JSONArray()
+            for (i in 0 until urls.length()) {
+                val url = urls.optString(i)
+                val path = url.substringAfter("polaraccesslink.com", url)
+                val (ic, ib) = get(path)
+                if (ic in 200..299) newest = JSONObject(String(ib))
+            }
+        }
+        // Transaktion bestätigen, sonst liefert Polar sie immer wieder
+        val (pc, _) = http("PUT", "$API/v3/users/$uid/physical-information-transactions/$tid", "", "application/json")
+        log("PUT commit → $pc")
+        val o = newest ?: return false
+        Repo.putWatchBody(
+            WatchBody(
+                maxHr = num(o, "maximum", "heart")?.toInt(),
+                restHr = num(o, "resting", "heart")?.toInt(),
+                weightKg = num(o, "weight", exclude = "source"),
+                vo2max = num(o, "vo2"),
+            )
+        )
+        return true
     }
 
     // ---------- Hilfsfunktionen ----------

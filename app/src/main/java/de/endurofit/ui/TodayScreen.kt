@@ -59,6 +59,7 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit, onO
             }
         }
         SickSection()
+        SickEarlyWarning()
 
         if (live != null) {
             SectionCard {

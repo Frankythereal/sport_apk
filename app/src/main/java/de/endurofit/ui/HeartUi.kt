@@ -181,6 +181,7 @@ fun HeartHistory() {
         }
 
         HrvTrendCard(days)
+        EcgCard()
 
         SectionCard("Gut zu wissen") {
             Hint(

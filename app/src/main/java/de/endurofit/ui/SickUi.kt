@@ -216,3 +216,52 @@ fun SickTrainingBanner() {
         }
     }
 }
+
+/**
+ * Frühwarnung: Hauttemperatur über dem Normalwert, dazu erhöhter Ruhepuls oder gesunkene HRV –
+ * oft die ersten Anzeichen eines Infekts, bevor man selbst etwas merkt.
+ */
+@Composable
+fun SickEarlyWarning() {
+    val sick by Repo.sick.collectAsState()
+    val skin by Repo.skin.collectAsState()
+    val rec by Repo.recovery.collectAsState()
+    val dayHr by Repo.dayHr.collectAsState()
+    var start by remember { mutableStateOf(false) }
+    var dismissed by remember { mutableStateOf(false) }
+    if (Sick.current(sick) != null || dismissed) return
+
+    val today = Calc.dayStart(System.currentTimeMillis())
+    val s = skin[today] ?: skin[Calc.addDays(today, -1)] ?: return
+    val dev = s.deviation ?: return
+
+    val restNow = (rec[s.day]?.nightHr ?: dayHr[s.day]?.resting)
+    val restBase = (1..14).mapNotNull { rec[Calc.addDays(s.day, -it)]?.nightHr ?: dayHr[Calc.addDays(s.day, -it)]?.resting }
+        .takeIf { it.size >= 3 }?.average()
+    val hrvNow = rec[s.day]?.hrv
+    val hrvBase = (1..14).mapNotNull { rec[Calc.addDays(s.day, -it)]?.hrv }.takeIf { it.size >= 3 }?.average()
+
+    val restUp = restNow != null && restBase != null && restNow - restBase >= 4
+    val hrvDown = hrvNow != null && hrvBase != null && hrvNow < hrvBase * 0.85
+    val warn = dev >= 0.8 || (dev >= 0.5 && (restUp || hrvDown))
+    if (!warn) return
+
+    SectionCard("⚠️ Möglicher Infekt im Anmarsch") {
+        Text(
+            "Deine Hauttemperatur liegt heute Nacht ${Calc.fmtNum(dev, 1)} °C über deinem Normalwert" +
+                (if (restUp) ", der Ruhepuls ist erhöht" else "") +
+                (if (hrvDown) ", die HRV ist gesunken" else "") + ".",
+        )
+        Hint(
+            "Das sind oft die ersten Anzeichen einer Erkältung – noch bevor man selbst etwas merkt. " +
+                "Heute lieber locker trainieren, viel trinken und früh schlafen. Kann aber auch von Alkohol, spätem Essen, " +
+                "einem warmen Schlafzimmer oder hartem Training am Vortag kommen.",
+            Modifier.padding(top = 4.dp)
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
+            OutlinedButton(onClick = { start = true }) { Text("🤒 Krankheitsmodus") }
+            TextButton(onClick = { dismissed = true }) { Text("Mir geht's gut") }
+        }
+    }
+    if (start) SymptomDialog(null) { start = false }
+}
