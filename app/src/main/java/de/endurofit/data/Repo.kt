@@ -104,8 +104,8 @@ object Repo {
     /** Ersetzt die Schritte im Zeitraum [fromDay] bis [toDay] (inklusive) durch [list]. */
     @Synchronized
     fun replaceSteps(fromDay: Long, toDay: Long, list: List<DaySteps>) {
-        val kept = _steps.value.filterKeys { it < fromDay || it > toDay }
-        _steps.value = kept + list.associateBy { it.day }
+        // Nur gelieferte Tage überschreiben – Tage ohne neue Daten bleiben erhalten
+        _steps.value = _steps.value + list.associateBy { it.day }
         saveList("steps.json", _steps.value.values.sortedBy { it.day }) { it.toJson() }
     }
 

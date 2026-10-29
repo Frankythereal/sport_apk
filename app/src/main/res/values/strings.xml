@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">EnduroFit</string>
+    <string name="widget_today_name">EnduroFit Heute</string>
+    <string name="widget_today_desc">Erholung, Ruhepuls, Kalorien, Schritte und Trinken auf einen Blick</string>
+    <string name="widget_water_name">EnduroFit Trinken</string>
+    <string name="widget_water_desc">Trinkstand mit +250-ml-Knopf</string>
 </resources>

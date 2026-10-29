@@ -1,6 +1,9 @@
 package de.endurofit
 
 import android.app.Application
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -21,9 +24,18 @@ import de.endurofit.ui.AppRoot
 import de.endurofit.ui.EnduroTheme
 
 class App : Application() {
+    private val appScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
     override fun onCreate() {
         super.onCreate()
         Repo.init(this)
+        // Widgets aktualisieren, sobald sich etwas ändert (Trinken, Essen, Schritte, Erholung …)
+        appScope.launch {
+            kotlinx.coroutines.flow.merge(
+                Repo.water, Repo.food, Repo.steps, Repo.recovery, Repo.dayHr, Repo.goals, Repo.sessions, Repo.sick,
+            ).drop(1).debounce(1500).collect { de.endurofit.widget.Widgets.updateAll(this@App) }
+        }
         // Kartendienst (OpenStreetMap) braucht eine Kennung und einen Zwischenspeicher
         org.osmdroid.config.Configuration.getInstance().apply {
             userAgentValue = packageName

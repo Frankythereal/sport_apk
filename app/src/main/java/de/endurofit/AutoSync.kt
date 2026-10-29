@@ -43,6 +43,7 @@ object AutoSync {
             }
             lastRun.value = System.currentTimeMillis()
             running.value = false
+            de.endurofit.widget.Widgets.updateAll(appCtx)
         }
     }
 }

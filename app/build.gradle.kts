@@ -60,4 +60,5 @@ dependencies {
     implementation("androidx.health.connect:connect-client:1.1.0-alpha12")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("org.osmdroid:osmdroid-android:6.1.20")
+    implementation("androidx.glance:glance-appwidget:1.1.1")
 }
