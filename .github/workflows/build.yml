@@ -54,7 +54,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete latest --yes --cleanup-tag || true
-          gh release create latest EnduroFit.apk \
-            --title "EnduroFit – neueste Version (Build ${{ github.run_number }})" \
-            --notes "Auf dem Handy herunterladen und installieren."
+          # Release nur beim ersten Mal anlegen, danach nur die Datei ersetzen –
+          # so bricht kein laufender Download ab, weil das Release kurz weg ist
+          if ! gh release view latest >/dev/null 2>&1; then
+            gh release create latest --title "EnduroFit – neueste Version" --notes "Auf dem Handy herunterladen und installieren."
+          fi
+          gh release upload latest EnduroFit.apk --clobber
+          gh release edit latest --title "EnduroFit – neueste Version (Build ${{ github.run_number }})"
