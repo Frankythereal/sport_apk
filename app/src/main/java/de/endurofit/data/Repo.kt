@@ -40,6 +40,12 @@ object Repo {
     private val _dayHr = MutableStateFlow<Map<Long, DayHr>>(emptyMap())
     val dayHr: StateFlow<Map<Long, DayHr>> = _dayHr
 
+    private val _recovery = MutableStateFlow<Map<Long, Recovery>>(emptyMap())
+    val recovery: StateFlow<Map<Long, Recovery>> = _recovery
+
+    private val _cardio = MutableStateFlow<Map<Long, CardioLoad>>(emptyMap())
+    val cardio: StateFlow<Map<Long, CardioLoad>> = _cardio
+
     private val _sick = MutableStateFlow<List<SickPeriod>>(emptyList())
     val sick: StateFlow<List<SickPeriod>> = _sick
 
@@ -70,6 +76,8 @@ object Repo {
         _spo2.value = loadList("spo2.json") { Spo2Entry.fromJson(it) }.sortedByDescending { it.t }
         _dayHr.value = loadList("dayhr.json") { DayHr.fromJson(it) }.associateBy { it.day }
         _sick.value = loadList("sick.json") { SickPeriod.fromJson(it) }.sortedByDescending { it.start }
+        _recovery.value = loadList("recovery.json") { Recovery.fromJson(it) }.associateBy { it.day }
+        _cardio.value = loadList("cardio.json") { CardioLoad.fromJson(it) }.associateBy { it.day }
         val g = File(baseDir, "goals.json")
         if (g.exists()) {
             try { _goals.value = Goals.fromJson(JSONObject(g.readText())) } catch (e: Exception) { Log.w(TAG, "goals.json defekt", e) }
@@ -120,6 +128,39 @@ object Repo {
         _sleep.value = _sleep.value.filter { it.id != id }
         saveList("sleep.json", _sleep.value) { it.toJson() }
     }
+
+    // ---------- Polar: Erholung und Belastung ----------
+
+    @Synchronized
+    fun putRecovery(list: List<Recovery>) {
+        _recovery.value = _recovery.value + list.associateBy { it.day }
+        saveList("recovery.json", _recovery.value.values.sortedBy { it.day }) { it.toJson() }
+    }
+
+    @Synchronized
+    fun putCardio(list: List<CardioLoad>) {
+        _cardio.value = _cardio.value + list.associateBy { it.day }
+        saveList("cardio.json", _cardio.value.values.sortedBy { it.day }) { it.toJson() }
+    }
+
+    // Zugangsdaten für Polar AccessLink (bleiben nur auf dem Handy)
+    var polarClientId: String
+        get() = prefs.getString("polar_id", "") ?: ""
+        set(v) = prefs.edit().putString("polar_id", v.trim()).apply()
+    var polarSecret: String
+        get() = prefs.getString("polar_secret", "") ?: ""
+        set(v) = prefs.edit().putString("polar_secret", v.trim()).apply()
+    var polarToken: String
+        get() = prefs.getString("polar_token", "") ?: ""
+        set(v) = prefs.edit().putString("polar_token", v).apply()
+    var polarUserId: String
+        get() = prefs.getString("polar_user", "") ?: ""
+        set(v) = prefs.edit().putString("polar_user", v).apply()
+    var polarLastSync: Long
+        get() = prefs.getLong("polar_sync", 0L)
+        set(v) = prefs.edit().putLong("polar_sync", v).apply()
+
+    fun baseDirPath(): File = baseDir
 
     // ---------- Krankheitsmodus ----------
 

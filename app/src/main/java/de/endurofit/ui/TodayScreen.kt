@@ -129,6 +129,8 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit, onO
             }
         }
 
+        RecoveryCard()
+
         HeartTodayCard(onHistory = onOpenHeart)
 
         Spo2Card()

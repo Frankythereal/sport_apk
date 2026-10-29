@@ -18,6 +18,7 @@ import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import de.endurofit.data.Calc
 import de.endurofit.data.DayHr
+import de.endurofit.data.DayHrBuilder
 import de.endurofit.data.Fit
 import de.endurofit.data.DaySteps
 import de.endurofit.data.HrSample
@@ -72,7 +73,7 @@ object SuuntoImport {
     }
 
     private fun isSuunto(pkg: String) = pkg.contains("suunto", true) || pkg.startsWith("com.stt.android")
-    private fun isPolar(pkg: String) = pkg.startsWith("fi.polar")
+    fun isPolar(pkg: String) = pkg.startsWith("fi.polar")
     private fun isGarmin(pkg: String) = pkg.startsWith("com.garmin")
 
     /** Daten von einer Sportuhr (nicht vom Handy) – werden bevorzugt. */
@@ -185,11 +186,7 @@ object SuuntoImport {
                 emptyList()
             }
             if (track.isEmpty()) track = existing?.track ?: emptyList()
-            val guessedType = when (rec.exerciseType) {
-                ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING,
-                ExerciseSessionRecord.EXERCISE_TYPE_WEIGHTLIFTING -> SessionType.GYM
-                else -> SessionType.OTHER
-            }
+            val guessedType = guessType(rec.exerciseType, rec.title)
             Repo.saveSession(
                 Session(
                     id = id,
@@ -358,7 +355,8 @@ object SuuntoImport {
             var t2: String? = null
             do {
                 val resp = client.readRecords(ReadRecordsRequest(RestingHeartRateRecord::class, range, pageToken = t2))
-                resp.records.filter { it.metadata.dataOrigin.packageName != ctx.packageName }
+                // Polar schreibt hier nur den Ruhepuls aus den Profileinstellungen – kein Messwert, daher ignorieren
+                resp.records.filter { val o = it.metadata.dataOrigin.packageName; o != ctx.packageName && !isPolar(o) }
                     .forEach { resting[Calc.dayStart(it.time.toEpochMilli())] = it.beatsPerMinute.toInt() }
                 t2 = resp.pageToken
             } while (t2 != null)
@@ -369,43 +367,33 @@ object SuuntoImport {
         val days = bySource.values.flatten().map { Calc.dayStart(it.t) }.toSet()
         val out = ArrayList<DayHr>()
         for (day in days) {
+            // Tage, die schon über die Polar-Schnittstelle (24/7-Puls) kamen, nicht überschreiben
+            if (Repo.dayHr.value[day]?.source == de.endurofit.polar.PolarApi.SOURCE) continue
             val next = Calc.addDays(day, 1)
-            // Pro Tag die Quelle mit den meisten Werten, Suunto bevorzugt
-            val (pkg, all) = bySource.entries
-                .map { it.key to it.value.filter { s -> s.t in day until next && s.bpm in 25..230 } }
+            // Pro Tag die Quelle mit den meisten Werten, Uhr bevorzugt
+            val candidates = bySource.entries
+                .map { it.key to it.value.filter { s -> s.t in day until next } }
                 .filter { it.second.isNotEmpty() }
                 .sortedWith(compareByDescending<Pair<String, List<HrSample>>> { isWatch(it.first) }.thenByDescending { it.second.size })
-                .firstOrNull() ?: continue
-            val sorted = all.sortedBy { it.t }
-            val buckets = sorted.groupBy { (it.t - day) / 300_000 }
-                .map { (b, l) -> HrSample(day + b * 300_000 + 150_000, l.sumOf { it.bpm } / l.size) }
-                .sortedBy { it.t }
-            // Ruhigste 30 Minuten (6 aufeinanderfolgende 5-Minuten-Werte)
-            var est: Int? = null
-            if (buckets.size >= 6) {
-                for (i in 0..buckets.size - 6) {
-                    val win = buckets.subList(i, i + 6)
-                    if (win.last().t - win.first().t > 40 * 60_000) continue
-                    val a = win.sumOf { it.bpm } / 6
-                    if (est == null || a < est) est = a
-                }
-            }
-            val measured = resting[day]
-            out.add(
-                DayHr(
-                    day = day,
-                    points = buckets,
-                    min = sorted.minOf { it.bpm },
-                    max = sorted.maxOf { it.bpm },
-                    avg = sorted.sumOf { it.bpm } / sorted.size,
-                    resting = measured ?: est,
-                    restingMeasured = measured != null,
-                    source = pkg,
-                )
-            )
+            val built = candidates.firstNotNullOfOrNull { (pkg, list) ->
+                DayHrBuilder.build(day, list, resting[day], true, pkg)
+            } ?: continue
+            out.add(built)
         }
         Repo.replaceDayHr(out)
         return out.size
+    }
+
+    /** Sportart erkennen – Polar schreibt z. B. "Motorsport" nur in den Titel. */
+    fun guessType(exerciseType: Int, title: String?): SessionType {
+        val t = title.orEmpty().lowercase()
+        return when {
+            Regex("motor|enduro|moto|mx\\b|trial").containsMatchIn(t) -> SessionType.ENDURO
+            Regex("kraft|strength|gym|fitness|hantel|weight|krafttraining").containsMatchIn(t) -> SessionType.GYM
+            exerciseType == ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING ||
+                exerciseType == ExerciseSessionRecord.EXERCISE_TYPE_WEIGHTLIFTING -> SessionType.GYM
+            else -> SessionType.OTHER
+        }
     }
 
     // ---------- Diagnose ----------

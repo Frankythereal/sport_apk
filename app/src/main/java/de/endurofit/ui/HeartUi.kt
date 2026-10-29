@@ -173,6 +173,8 @@ fun HeartHistory() {
             }
         }
 
+        HrvTrendCard(days)
+
         SectionCard("Gut zu wissen") {
             Hint(
                 "Der Ruhepuls ist einer der besten Fitness-Anzeiger: Sinkt er über Wochen, wird dein Herz-Kreislauf-System leistungsfähiger. " +

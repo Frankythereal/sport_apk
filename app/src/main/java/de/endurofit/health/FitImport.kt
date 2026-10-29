@@ -70,7 +70,7 @@ object FitImport {
         Result(ok, errors)
     }
 
-    private fun save(a: Fit.Activity): Session {
+    fun save(a: Fit.Activity, typeOverride: de.endurofit.data.SessionType? = null, titleOverride: String? = null): Session {
         val profile = Repo.profile.value
         val id = "fit_" + (a.start / 1000)
         val existing = Repo.session(id)
@@ -78,8 +78,8 @@ object FitImport {
         val s = Session(
             id = id,
             // Was du selbst geändert hast (Art, Name, Notiz, Sätze), bleibt bei erneutem Import erhalten
-            type = existing?.type ?: Fit.sessionType(a.sport, a.subSport),
-            title = existing?.title ?: Fit.sportName(a.sport, a.subSport),
+            type = existing?.type ?: typeOverride ?: Fit.sessionType(a.sport, a.subSport),
+            title = existing?.title ?: titleOverride ?: Fit.sportName(a.sport, a.subSport),
             start = a.start,
             end = a.end,
             source = SOURCE_SUUNTO,

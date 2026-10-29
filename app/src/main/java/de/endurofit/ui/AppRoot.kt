@@ -30,6 +30,13 @@ fun AppRoot() {
             }
         } catch (_: Exception) {
         }
+        // Danach Polar direkt – liefert 24/7-Puls, Erholung und Trainings mit GPS
+        try {
+            if (de.endurofit.polar.PolarApi.connected && System.currentTimeMillis() - Repo.polarLastSync > 15 * 60_000L) {
+                de.endurofit.polar.PolarApi.sync(ctx, days = 3)
+            }
+        } catch (_: Exception) {
+        }
     }
 
     // Geteilte Dateien: FIT-Dateien importieren, Fotos zur Essenserkennung schicken

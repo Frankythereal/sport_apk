@@ -333,3 +333,57 @@ data class DayHr(
         }
     }
 }
+
+// ---------- Polar: Erholung (Nightly Recharge) und Trainingsbelastung (Cardio Load) ----------
+
+data class Recovery(
+    val day: Long,
+    /** HRV (RMSSD) im Schlaf in ms */
+    val hrv: Double?,
+    /** Durchschnittspuls in der Nacht */
+    val nightHr: Int?,
+    val breathing: Double?,
+    /** ANS-Charge, ca. -10 … +10 */
+    val ansCharge: Double?,
+    /** Nightly-Recharge-Status 1 (sehr schlecht) … 6 (sehr gut) */
+    val status: Int?,
+    val sleepScore: Int?,
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("day", day)
+        hrv?.let { put("hrv", it) }; nightHr?.let { put("nhr", it) }; breathing?.let { put("br", it) }
+        ansCharge?.let { put("ans", it) }; status?.let { put("st", it) }; sleepScore?.let { put("ss", it) }
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject) = Recovery(
+            o.getLong("day"),
+            if (o.has("hrv")) o.getDouble("hrv") else null,
+            if (o.has("nhr")) o.getInt("nhr") else null,
+            if (o.has("br")) o.getDouble("br") else null,
+            if (o.has("ans")) o.getDouble("ans") else null,
+            if (o.has("st")) o.getInt("st") else null,
+            if (o.has("ss")) o.getInt("ss") else null,
+        )
+    }
+}
+
+data class CardioLoad(
+    val day: Long,
+    val load: Double,
+    val strain: Double,
+    val tolerance: Double,
+    val ratio: Double,
+    val status: String,
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("day", day); put("load", load); put("strain", strain); put("tol", tolerance); put("ratio", ratio); put("status", status)
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject) = CardioLoad(
+            o.getLong("day"), o.optDouble("load", 0.0), o.optDouble("strain", 0.0), o.optDouble("tol", 0.0),
+            o.optDouble("ratio", 0.0), o.optString("status"),
+        )
+    }
+}
