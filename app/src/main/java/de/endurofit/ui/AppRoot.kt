@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.zIndex
+import androidx.compose.animation.togetherWith
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -76,7 +77,17 @@ fun AppRoot() {
             if (syncing) {
                 LinearProgressIndicator(Modifier.fillMaxWidth().align(androidx.compose.ui.Alignment.TopCenter).zIndex(1f))
             }
-            when (tab) {
+            androidx.compose.animation.AnimatedContent(
+                targetState = tab,
+                transitionSpec = {
+                    val dir = if (targetState > initialState) 1 else -1
+                    (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
+                        androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { w -> dir * w / 8 }) togetherWith
+                        androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(140))
+                },
+                label = "tabs",
+            ) { t ->
+            when (t) {
                 0 -> TodayScreen(
                     onOpenTraining = { tab = 1 },
                     onOpenSession = { openSession = it; tab = 3 },
@@ -86,6 +97,7 @@ fun AppRoot() {
                 2 -> FoodScreen()
                 3 -> AnalysisScreen(selected = openSession, onSelect = { openSession = it })
                 else -> ProfileScreen(onOpenSession = { openSession = it; tab = 3 })
+            }
             }
         }
     }
