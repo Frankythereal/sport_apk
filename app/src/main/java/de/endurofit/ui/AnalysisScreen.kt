@@ -54,19 +54,18 @@ fun AnalysisScreen(selected: String?, onSelect: (String?) -> Unit) {
     }
     val view by Nav.analysisView.collectAsState()
     Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp).horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChip(selected = view == 0, onClick = { Nav.analysisView.value = 0 }, label = { Text("📊 Auswertung") })
-            FilterChip(selected = view == 2, onClick = { Nav.analysisView.value = 2 }, label = { Text("❤️ Herz") })
-            FilterChip(selected = view == 1, onClick = { Nav.analysisView.value = 1 }, label = { Text("📋 Trainings") })
-        }
+        Segmented(
+            listOf(0 to "📊 Auswertung", 2 to "❤️ Herz", 1 to "🏍️ Trainings"),
+            view, { Nav.analysisView.value = it },
+            Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
+        )
         Box(Modifier.weight(1f)) {
-            when (view) {
-                0 -> AnalysisContent(onSelect = { onSelect(it) })
-                2 -> HeartHistory()
-                else -> HistoryScreen(selected = null, onSelect = onSelect)
+            androidx.compose.animation.Crossfade(view, label = "view") { v ->
+                when (v) {
+                    0 -> AnalysisContent(onSelect = { onSelect(it) })
+                    2 -> HeartHistory()
+                    else -> HistoryScreen(selected = null, onSelect = onSelect)
+                }
             }
         }
     }
@@ -121,16 +120,18 @@ private fun AnalysisContent(onSelect: (String) -> Unit) {
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Period.entries.forEach { p ->
-                FilterChip(selected = period == p, onClick = { period = p; offset = 0 }, label = { Text(p.label) })
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { offset-- }) { Text("◀") }
+        Segmented(Period.entries.map { it to it.label }, period, { period = it; offset = 0 })
+        Spacer(Modifier.height(8.dp))
+        Row(
+            Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant).padding(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = { offset-- }) { Text("‹", fontSize = 26.sp) }
             Text(label, Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-            TextButton(onClick = { offset++ }, enabled = offset < 0) { Text("▶") }
+            IconButton(onClick = { offset++ }, enabled = offset < 0) { Text("›", fontSize = 26.sp) }
         }
+        Spacer(Modifier.height(12.dp))
 
         if (sums.isEmpty()) {
             Hint("Für diesen Zeitraum gibt es noch keine Daten.")

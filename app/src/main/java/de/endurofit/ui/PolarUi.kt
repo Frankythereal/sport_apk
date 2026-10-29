@@ -45,7 +45,8 @@ fun PolarSettings() {
     var help by remember { mutableStateOf(!PolarApi.connected) }
     var pasted by remember { mutableStateOf("") }
 
-    SectionCard("🔴 Polar direkt verbinden") {
+    SectionCard("🔴 Polar", collapsible = true, startOpen = !PolarApi.connected,
+        subtitle = if (connected) "Verbunden" + (if (Repo.polarLastSync > 0) " · ${Calc.fmtClock(Repo.polarLastSync)} Uhr" else "") else "Nicht verbunden") {
         Hint(
             "Holt zusätzlich, was Polar nicht an Health Connect gibt: Puls rund um die Uhr, Nightly Recharge (HRV, Nacht-Puls, Atmung), " +
                 "Schlaf-Score und Trainingsbelastung – und jedes Training mit GPS-Strecke."
@@ -278,7 +279,7 @@ fun WatchBodyCard() {
     val body by Repo.watchBody.collectAsState()
     var auto by remember { mutableStateOf(Repo.useWatchBody) }
     if (body.updated == 0L) return
-    SectionCard("⌚ Werte von der Uhr") {
+    SectionCard("⌚ Werte von der Uhr", collapsible = true, startOpen = false, subtitle = "Max. Puls, Gewicht, VO2max") {
         StatRow(
             "Max. Puls" to (body.maxHr?.toString() ?: "–"),
             "Ruhepuls" to (body.restHr?.toString() ?: "–"),

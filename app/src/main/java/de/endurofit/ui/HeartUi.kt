@@ -105,11 +105,7 @@ fun HeartHistory() {
     val data = days.mapNotNull { all[it] }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf(7 to "7 Tage", 30 to "30 Tage", 90 to "3 Monate", 365 to "1 Jahr").forEach { (n, l) ->
-                FilterChip(selected = span == n, onClick = { span = n; sel = null }, label = { Text(l) })
-            }
-        }
+        Segmented(listOf(7 to "7 T.", 30 to "30 T.", 90 to "3 M.", 365 to "1 J."), span, { span = it; sel = null })
         Spacer(Modifier.height(8.dp))
 
         if (data.isEmpty()) {

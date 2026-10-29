@@ -16,6 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.PermissionController
 import de.endurofit.data.Analysis
 import de.endurofit.data.Calc
@@ -63,10 +66,43 @@ fun ProfileScreen(onOpenSession: (String) -> Unit = {}) {
         }
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        ScreenTitle("Profil")
+    val body by Repo.watchBody.collectAsState()
+    val polarOn by de.endurofit.polar.PolarApi.isConnected.collectAsState()
+    LaunchedEffect(Unit) { de.endurofit.polar.PolarApi.refreshConnected() }
 
-        SectionCard("Deine Daten") {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp)) {
+        // ---------- Kopf ----------
+        Appear(0) {
+            Tile(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(58.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Accent, androidx.compose.ui.graphics.Color(0xFFD7192D)))),
+                        contentAlignment = Alignment.Center,
+                    ) { Text("🏍️", fontSize = 28.sp) }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Dein Profil", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Hint("${profile.age} Jahre · ${Calc.fmtNum(profile.weightKg, 1)} kg · ${profile.heightCm} cm")
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                StatRow(
+                    "HFmax" to "${profile.effectiveMaxHr}",
+                    "Ruhepuls" to "${profile.restHr}",
+                    "VO2max" to (body.vo2max?.let { Calc.fmtNum(it) } ?: "–"),
+                    "Grundums." to Calc.fmtNum(Calc.bmr(profile)),
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    StatusPill("Polar", polarOn)
+                    StatusPill("Sensor", Repo.lastDeviceAddress != null)
+                    StatusPill("Foto-KI", Repo.claudeKey.isNotBlank())
+                }
+            }
+        }
+
+        SectionCard("👤 Deine Daten", collapsible = true, startOpen = false, subtitle = "Alter, Gewicht, Größe, Puls") {
             Hint("Damit rechnet die App Kalorien, Grundumsatz und Pulszonen.")
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -96,7 +132,7 @@ fun ProfileScreen(onOpenSession: (String) -> Unit = {}) {
             }) { Text("Speichern") }
         }
 
-        SectionCard("Deine Pulszonen") {
+        SectionCard("❤️ Deine Pulszonen", collapsible = true, startOpen = false, subtitle = "Z1–Z5 nach deinem max. Puls") {
             val m = draft.effectiveMaxHr
             Text("HFmax: $m bpm" + if (draft.maxHr == 0) " (geschätzt aus dem Alter)" else "", fontWeight = FontWeight.SemiBold)
             Hint("Grundumsatz: ${Calc.fmtNum(Calc.bmr(draft))} kcal pro Tag")
@@ -116,13 +152,13 @@ fun ProfileScreen(onOpenSession: (String) -> Unit = {}) {
         PolarSettings()
         WatchBodyCard()
 
-        SectionCard("📂 Trainings als FIT-Datei") {
+        SectionCard("📂 Trainings als FIT-Datei", collapsible = true, startOpen = false, subtitle = "Import aus Suunto & Co.") {
             Hint("Falls deine Uhr keine Daten an Health Connect gibt (z. B. Suunto): Trainings als FIT-Datei aus der Uhren-App teilen. Damit kommen Puls, Kalorien und die GPS-Strecke mit.")
             Spacer(Modifier.height(8.dp))
             FitImportSection(onOpen = onOpenSession)
         }
 
-        SectionCard("Health Connect (Schritte, Blutsauerstoff)") {
+        SectionCard("🔗 Health Connect", collapsible = true, startOpen = false, subtitle = "Schritte, Blutsauerstoff, Trainings") {
             SuuntoImportSection(compact = false)
             Spacer(Modifier.height(8.dp))
             HealthDiagnosis()
@@ -130,7 +166,7 @@ fun ProfileScreen(onOpenSession: (String) -> Unit = {}) {
 
         FoodAiSettings()
 
-        SectionCard("Export") {
+        SectionCard("📤 Export", collapsible = true, startOpen = false, subtitle = "CSV für Excel") {
             Hint("Als CSV-Datei, die sich in Excel oder Google Tabellen öffnen lässt.")
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -139,7 +175,7 @@ fun ProfileScreen(onOpenSession: (String) -> Unit = {}) {
             }
         }
 
-        SectionCard("Tipps für saubere Aufnahmen") {
+        SectionCard("💡 Tipps für saubere Aufnahmen", collapsible = true, startOpen = false) {
             Text("• Samsung beendet gern Apps im Hintergrund. Stell unter Einstellungen → Apps → EnduroFit → Akku auf „Nicht eingeschränkt“.")
             Text("• Die Verity Sense am Oberarm oder oberen Unterarm tragen, nicht direkt am Ellbogenprotektor.")
             Text("• Das Handy muss beim Fahren dabei sein (Rucksack oder Jacke), damit es den Puls empfängt.")
@@ -240,7 +276,7 @@ private fun GoalsEditor() {
         mode = mode,
     )
 
-    SectionCard("Ziele") {
+    SectionCard("🎯 Ziele", collapsible = true, startOpen = false, subtitle = "${goals.mode.label} · ${goals.steps} Schritte · ${Calc.fmtNum(goals.sleepHours, 1)} h Schlaf") {
         Text("Was willst du erreichen?", fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp).horizontalScroll(rememberScrollState())) {
             KcalMode.entries.forEach { m ->
@@ -331,4 +367,17 @@ private fun HealthDiagnosis() {
             "2) Android-Einstellungen → Health Connect → App-Berechtigungen → App der Uhr → alles erlauben. " +
             "3) Die Uhr einmal mit ihrer App synchronisieren. Trainings kannst du zur Not immer als FIT-Datei teilen."
     )
+}
+
+
+@Composable
+private fun StatusPill(label: String, ok: Boolean) {
+    val c = if (ok) Good else MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).background(c.copy(alpha = 0.15f)).padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(if (ok) "✓ " else "○ ", color = c, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+        Text(label, style = MaterialTheme.typography.labelMedium)
+    }
 }

@@ -41,7 +41,7 @@ import kotlin.math.roundToInt
 
 /** Knöpfe "Foto" und "Galerie" plus der ganze Ablauf bis zum Speichern. */
 @Composable
-fun FoodPhotoButtons(day: Long) {
+fun FoodPhotoButtons(day: Long, asTiles: Boolean = false, onManual: (() -> Unit)? = null, onPaste: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     var photo by remember { mutableStateOf<Uri?>(null) }
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
@@ -58,23 +58,33 @@ fun FoodPhotoButtons(day: Long) {
         if (uri != null) photo = uri
     }
 
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(onClick = {
-            try {
-                val dir = File(ctx.cacheDir, "photos").apply { mkdirs() }
-                // Alte Fotos aufräumen – sie werden nur für die Analyse gebraucht
-                dir.listFiles()?.forEach { it.delete() }
-                val f = File(dir, "essen_${System.currentTimeMillis()}.jpg")
-                val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
-                cameraUri = uri
-                camera.launch(uri)
-            } catch (e: Exception) {
-                Toast.makeText(ctx, "Kamera nicht verfügbar", Toast.LENGTH_SHORT).show()
-            }
-        }, modifier = Modifier.weight(1f)) { Text("📷 Essen fotografieren") }
-        OutlinedButton(onClick = {
-            gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-        }) { Text("🖼️ Galerie") }
+    fun openCamera() {
+        try {
+            val dir = File(ctx.cacheDir, "photos").apply { mkdirs() }
+            // Alte Fotos aufräumen – sie werden nur für die Analyse gebraucht
+            dir.listFiles()?.forEach { it.delete() }
+            val f = File(dir, "essen_${System.currentTimeMillis()}.jpg")
+            val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
+            cameraUri = uri
+            camera.launch(uri)
+        } catch (e: Exception) {
+            Toast.makeText(ctx, "Kamera nicht verfügbar", Toast.LENGTH_SHORT).show()
+        }
+    }
+    fun openGallery() = gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+
+    if (asTiles) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("📷", "Foto", Modifier.weight(1f), color = Accent) { openCamera() }
+            ActionTile("🖼️", "Galerie", Modifier.weight(1f), color = androidx.compose.ui.graphics.Color(0xFF26C6DA)) { openGallery() }
+            if (onManual != null) ActionTile("✏️", "Von Hand", Modifier.weight(1f), color = androidx.compose.ui.graphics.Color(0xFF66BB6A)) { onManual() }
+            if (onPaste != null) ActionTile("📋", "Text", Modifier.weight(1f), color = androidx.compose.ui.graphics.Color(0xFFFFCA28)) { onPaste() }
+        }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { openCamera() }, modifier = Modifier.weight(1f)) { Text("📷 Essen fotografieren") }
+            OutlinedButton(onClick = { openGallery() }) { Text("🖼️ Galerie") }
+        }
     }
 
     photo?.let { uri ->
@@ -259,7 +269,7 @@ fun FoodAiSettings() {
     var status by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
-    SectionCard("📷 Essensfotos erkennen") {
+    SectionCard("📷 Essensfotos erkennen", collapsible = true, startOpen = false, subtitle = if (Repo.claudeKey.isNotBlank()) "Eingerichtet" else "Claude-API-Schlüssel nötig") {
         Hint(
             "Die App schickt dein Essensfoto an Claude und bekommt Kalorien, Eiweiß, Kohlenhydrate und Fett zurück. " +
                 "Klappt auch mit Fotos von Nährwerttabellen. Dafür brauchst du einen eigenen API-Schlüssel: " +

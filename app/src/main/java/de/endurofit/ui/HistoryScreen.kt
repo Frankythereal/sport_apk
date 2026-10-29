@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import de.endurofit.data.Calc
 import de.endurofit.data.Repo
 import de.endurofit.data.SOURCE_SUUNTO
@@ -38,17 +39,29 @@ fun HistoryScreen(selected: String?, onSelect: (String?) -> Unit) {
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), contentPadding = PaddingValues(vertical = 16.dp)) {
         item {
-            FitImportSection(onOpen = { onSelect(it) })
-            SuuntoImportSection(compact = true)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 8.dp).horizontalScroll(rememberScrollState())) {
-                FilterChip(selected = filter == null, onClick = { filter = null }, label = { Text("Alle") })
+            // Kurzer Überblick als Kacheln
+            val month = sessions.filter { it.start >= System.currentTimeMillis() - 30L * 86_400_000L }
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Stat("Trainings (30 T.)", month.size.toString(), Modifier.weight(1f).fillMaxHeight())
+                Stat("Zeit", Calc.fmtDuration(month.sumOf { it.durationMs }), Modifier.weight(1f).fillMaxHeight())
+                Stat("kcal", Calc.fmtNum(month.sumOf { it.kcal }), Modifier.weight(1f).fillMaxHeight())
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 10.dp).horizontalScroll(rememberScrollState())) {
+                FilterChip(selected = filter == null, onClick = { filter = null }, label = { Text("Alle") }, shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
                 SessionType.entries.forEach { t ->
-                    FilterChip(selected = filter == t, onClick = { filter = t }, label = { Text(t.emoji + " " + t.label) })
+                    FilterChip(selected = filter == t, onClick = { filter = t }, label = { Text(t.emoji + " " + t.label) }, shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
                 }
             }
             if (shown.isEmpty()) Hint("Noch keine Trainings gespeichert.")
         }
-        items(shown, key = { it.id }) { s -> SessionRow(s) { onSelect(s.id) } }
+        items(shown, key = { it.id }) { s -> Box(Modifier.animateItem()) { SessionRow(s) { onSelect(s.id) } } }
+        item {
+            SectionCard("Trainings importieren", collapsible = true, startOpen = false, subtitle = "FIT-Dateien oder Health Connect") {
+                FitImportSection(onOpen = { onSelect(it) })
+                Spacer(Modifier.height(6.dp))
+                SuuntoImportSection(compact = true)
+            }
+        }
     }
 }
 

@@ -5,6 +5,10 @@ package de.endurofit.ui
 import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.animation.animateContentSize
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -26,47 +30,71 @@ import de.endurofit.data.Profile
 import de.endurofit.data.Session
 
 @Composable
-fun ScreenTitle(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text,
-        style = MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.Bold,
-        modifier = modifier.padding(bottom = 12.dp)
-    )
+fun ScreenTitle(text: String, modifier: Modifier = Modifier, subtitle: String? = null) {
+    Column(modifier.padding(bottom = 14.dp)) {
+        Text(text, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        if (subtitle != null) Hint(subtitle)
+    }
 }
 
+/**
+ * Abgerundete Kachel für einen Abschnitt. Blendet sich beim Erscheinen weich ein.
+ * Mit [collapsible] lässt sie sich auf- und zuklappen (Pfeil dreht sich mit).
+ */
 @Composable
 fun SectionCard(
     title: String? = null,
     modifier: Modifier = Modifier,
+    collapsible: Boolean = false,
+    startOpen: Boolean = true,
+    subtitle: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val appear = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, androidx.compose.animation.core.tween(380)) }
+    var open by rememberSaveable(title) { mutableStateOf(startOpen || !collapsible) }
+    val arrow by androidx.compose.animation.core.animateFloatAsState(if (open) 180f else 0f, label = "arrow")
     Card(
-        modifier = modifier.fillMaxWidth().padding(bottom = 12.dp),
+        modifier = modifier.fillMaxWidth().padding(bottom = 12.dp)
+            .graphicsLayer { alpha = appear.value; translationY = (1f - appear.value) * 24f },
+        shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(16.dp).animateContentSize()) {
             if (title != null) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = if (collapsible) Modifier.fillMaxWidth().clickable { open = !open } else Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        if (subtitle != null && (!open || !collapsible)) Hint(subtitle)
+                    }
+                    if (collapsible) Text("⌄", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.graphicsLayer { rotationZ = arrow })
+                }
+                if (open) Spacer(Modifier.height(10.dp))
             }
-            content()
+            if (open) content()
         }
     }
 }
 
+/** Kleiner Wert-Baustein mit eigenem Hintergrund – wirkt wie eine Mini-Kachel. */
 @Composable
 fun Stat(label: String, value: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified) {
-    Column(modifier) {
-        Text(value, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = color)
-        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(
+        modifier.clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f))
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = color, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
 }
 
 @Composable
 fun StatRow(vararg items: Pair<String, String>) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items.forEach { (label, value) -> Stat(label, value, Modifier.weight(1f)) }
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.forEach { (label, value) -> Stat(label, value, Modifier.weight(1f).fillMaxHeight()) }
     }
 }
 
@@ -78,6 +106,57 @@ fun Hint(text: String, modifier: Modifier = Modifier) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier
     )
+}
+
+/** Runder Knopf mit großem Emoji und Beschriftung darunter – für Schnellaktionen. */
+@Composable
+fun ActionTile(emoji: String, label: String, modifier: Modifier = Modifier, color: Color = Accent, onClick: () -> Unit) {
+    Tile(modifier, onClick = onClick) {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                Modifier.size(46.dp).clip(RoundedCornerShape(16.dp)).background(color.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center,
+            ) { Text(emoji, fontSize = 24.sp) }
+            Spacer(Modifier.height(6.dp))
+            Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        }
+    }
+}
+
+/** Plus/Minus-Regler statt Tastatur – z. B. für Wiederholungen und Gewicht. */
+@Composable
+fun Stepper(label: String, value: Double, step: Double, decimals: Int, onChange: (Double) -> Unit, modifier: Modifier = Modifier, min: Double = 0.0) {
+    Column(
+        modifier.clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)).padding(6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FilledTonalIconButton(onClick = { onChange((value - step).coerceAtLeast(min)) }, modifier = Modifier.size(36.dp)) { Text("−", fontSize = 20.sp) }
+            Text(Calc.fmtNum(value, decimals), Modifier.widthIn(min = 52.dp), fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            FilledTonalIconButton(onClick = { onChange(value + step) }, modifier = Modifier.size(36.dp)) { Text("+", fontSize = 20.sp) }
+        }
+    }
+}
+
+/** Segment-Umschalter (z. B. Woche | Monat | 3 Monate). */
+@Composable
+fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        options.forEach { (value, label) ->
+            val sel = value == selected
+            val bg by androidx.compose.animation.animateColorAsState(if (sel) Accent else Color.Transparent, label = "seg")
+            Box(
+                Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(bg).clickable { onSelect(value) }.padding(vertical = 9.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, fontWeight = FontWeight.SemiBold, color = if (sel) Color.Black else MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            }
+        }
+    }
 }
 
 /** Balken für die Zeit in den Pulszonen. */
@@ -121,24 +200,37 @@ fun NumField(label: String, value: String, onChange: (String) -> Unit, modifier:
     )
 }
 
+fun typeColor(t: de.endurofit.data.SessionType): Color = when (t) {
+    de.endurofit.data.SessionType.ENDURO -> Color(0xFFFF6D00)
+    de.endurofit.data.SessionType.GYM -> Color(0xFF66BB6A)
+    de.endurofit.data.SessionType.OTHER -> Color(0xFF26C6DA)
+}
+
+/** Training als Kachel: farbiger Streifen je Sportart, kleine Pulskurve, Kalorien. */
 @Composable
 fun SessionRow(s: Session, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(s.type.emoji, fontSize = 26.sp, modifier = Modifier.padding(end = 12.dp))
+    val c = typeColor(s.type)
+    Tile(Modifier.fillMaxWidth().padding(bottom = 10.dp), onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(c.copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center,
+            ) { Text(s.type.emoji, fontSize = 22.sp) }
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(s.title, fontWeight = FontWeight.SemiBold)
-                Hint(Calc.fmtDateTime(s.start) + if (s.source == de.endurofit.data.SOURCE_SUUNTO) " · Uhr" else "")
-                val parts = mutableListOf(Calc.fmtDuration(s.durationMs))
-                if (s.avgBpm > 0) parts.add("Ø ${s.avgBpm} / max ${s.maxBpm} bpm")
-                if (s.sets.isNotEmpty()) parts.add("${s.sets.size} Sätze")
-                Hint(parts.joinToString(" · "))
+                Text(s.title, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Hint(Calc.fmtShortDate(s.start) + " · " + Calc.fmtClock(s.start) + " · " + Calc.fmtDuration(s.durationMs) +
+                    (if (s.sets.isNotEmpty()) " · ${s.sets.size} Sätze" else ""))
             }
-            Text("${Calc.fmtNum(s.kcal)} kcal", fontWeight = FontWeight.Bold, color = Accent)
+            Column(horizontalAlignment = Alignment.End) {
+                Text("${Calc.fmtNum(s.kcal)}", fontWeight = FontWeight.Bold, color = c)
+                Hint("kcal")
+            }
+        }
+        if (s.samples.size > 1) {
+            Spacer(Modifier.height(8.dp))
+            Sparkline(s.samples, Modifier.fillMaxWidth().height(28.dp), color = c)
+            Hint("Ø ${s.avgBpm} · max ${s.maxBpm} bpm", Modifier.padding(top = 2.dp))
         }
     }
 }
