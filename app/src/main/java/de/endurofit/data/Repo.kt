@@ -13,6 +13,7 @@ import java.io.File
 object Repo {
     private const val TAG = "Repo"
     private lateinit var baseDir: File
+    private lateinit var cacheDir: File
     private lateinit var sessionDir: File
     private lateinit var prefs: SharedPreferences
 
@@ -161,6 +162,7 @@ object Repo {
         set(v) = prefs.edit().putLong("polar_sync", v).apply()
 
     fun baseDirPath(): File = baseDir
+    fun cacheDirPath(): File = cacheDir
 
     // ---------- Krankheitsmodus ----------
 
@@ -214,6 +216,7 @@ object Repo {
     fun init(ctx: Context) {
         if (::baseDir.isInitialized) return
         baseDir = ctx.applicationContext.filesDir
+        cacheDir = ctx.applicationContext.cacheDir
         sessionDir = File(baseDir, "sessions").apply { mkdirs() }
         prefs = ctx.applicationContext.getSharedPreferences("endurofit", Context.MODE_PRIVATE)
         load()

@@ -25,7 +25,6 @@ import de.endurofit.data.CardioLoad
 import de.endurofit.data.Recovery
 import de.endurofit.data.Repo
 import de.endurofit.polar.PolarApi
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private val PolarRed = Color(0xFFD7192D)
@@ -35,30 +34,16 @@ private val PolarRed = Color(0xFFD7192D)
 @Composable
 fun PolarSettings() {
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
     var id by remember { mutableStateOf(Repo.polarClientId) }
     var secret by remember { mutableStateOf(Repo.polarSecret) }
-    var connected by remember { mutableStateOf(PolarApi.connected) }
-    var busy by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { PolarApi.refreshConnected() }
+    val connected by PolarApi.isConnected.collectAsState()
+    val waiting by PolarApi.waiting.collectAsState()
+    val syncing by PolarApi.syncing.collectAsState()
+    val status by PolarApi.status.collectAsState()
     var help by remember { mutableStateOf(!PolarApi.connected) }
-
-    fun syncNow(days: Int) {
-        scope.launch {
-            busy = true
-            status = "Hole Daten von Polar …"
-            status = try {
-                val r = PolarApi.sync(ctx, days)
-                "✅ Trainings: ${r.trainings} · 24/7-Puls: ${r.hrDays} Tage · Erholung: ${r.recoveries} · Schlaf: ${r.nights} · Belastung: ${r.cardio}" +
-                    if (r.errors.isNotEmpty()) "\n⚠️ " + r.errors.joinToString("\n⚠️ ") else ""
-            } catch (e: Exception) {
-                "❌ ${e.message}"
-            }
-            connected = PolarApi.connected
-            busy = false
-        }
-    }
+    var pasted by remember { mutableStateOf("") }
 
     SectionCard("🔴 Polar direkt verbinden") {
         Hint(
@@ -70,17 +55,17 @@ fun PolarSettings() {
             Text("✅ Verbunden" + if (Repo.polarLastSync > 0) " · zuletzt ${Calc.fmtDateTime(Repo.polarLastSync)}" else "", fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(enabled = !busy, onClick = { syncNow(7) }) { Text(if (busy) "Lade …" else "Jetzt synchronisieren") }
-                OutlinedButton(enabled = !busy, onClick = { syncNow(28) }) { Text("28 Tage") }
+                Button(enabled = !syncing, onClick = { PolarApi.syncInBackground(ctx, 7) }) { Text(if (syncing) "Lade …" else "Jetzt synchronisieren") }
+                OutlinedButton(enabled = !syncing, onClick = { PolarApi.syncInBackground(ctx, 28) }) { Text("28 Tage") }
             }
-            TextButton(onClick = { PolarApi.logout(); connected = false; status = null }) { Text("Verbindung trennen", color = Bad) }
+            TextButton(onClick = { PolarApi.logout() }) { Text("Verbindung trennen", color = Bad) }
         } else {
             TextButton(onClick = { help = !help }) { Text(if (help) "Anleitung ausblenden" else "Anleitung (einmalig, ca. 5 Minuten)") }
             if (help) {
                 Text(
                     "1. Im Browser admin.polaraccesslink.com öffnen und mit deinem Polar-Konto anmelden.\n" +
-                        "2. Den Nutzungsbedingungen zustimmen und einen neuen „API client“ anlegen (Name z. B. EnduroFit).\n" +
-                        "3. Als „Authorization callback domain / Redirect URL“ genau diese Adresse eintragen:",
+                        "2. Einen neuen „API client“ anlegen (Name z. B. EnduroFit), alle drei Datentypen einschalten.\n" +
+                        "3. Als „Authorization callback domain“ genau diese Adresse eintragen:",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -91,8 +76,8 @@ fun PolarSettings() {
                     }) { Text("Kopieren") }
                 }
                 Text(
-                    "4. Nach dem Speichern zeigt Polar „Client ID“ und „Client Secret“ – beide hier eintragen.\n" +
-                        "5. „Mit Polar verbinden“ tippen, im Browser anmelden und zustimmen – danach zurück zu EnduroFit.",
+                    "4. „Client ID“ und „Client Secret“ hier eintragen.\n" +
+                        "5. „Mit Polar verbinden“ tippen – die Anmeldung muss hier auf dem Handy im Browser passieren, nicht am PC.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Spacer(Modifier.height(6.dp))
@@ -103,29 +88,33 @@ fun PolarSettings() {
                 visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(6.dp))
-            Button(enabled = !busy && id.isNotBlank() && secret.isNotBlank(), onClick = {
+            Button(enabled = !syncing && id.isNotBlank() && secret.isNotBlank(), onClick = {
                 Repo.polarClientId = id
                 Repo.polarSecret = secret
-                scope.launch {
-                    busy = true
-                    status = "Browser öffnet sich – bitte bei Polar anmelden und zustimmen …"
-                    try {
-                        PolarApi.login(ctx)
-                        connected = true
-                        busy = false
-                        syncNow(28)
-                    } catch (e: Exception) {
-                        status = "❌ ${e.message}"
-                        busy = false
-                    }
+                pasted = ""
+                PolarApi.startLogin(ctx)
+            }) { Text(if (waiting) "Nochmal öffnen" else "Mit Polar verbinden") }
+
+            if (waiting || status?.startsWith("❌") == true) {
+                Spacer(Modifier.height(10.dp))
+                Text("Browser zeigt „Seite nicht erreichbar“?", fontWeight = FontWeight.SemiBold)
+                Hint("Kein Problem: Tippe im Browser oben in die Adresszeile, kopiere die ganze Adresse (beginnt mit http://localhost:5000/oauth2_callback?code=…) und füge sie hier ein. Der Code gilt nur wenige Minuten.")
+                OutlinedTextField(
+                    pasted, { pasted = it }, label = { Text("Adresse aus dem Browser") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { clipboard.getText()?.text?.let { pasted = it } }) { Text("📋 Einfügen") }
+                    Button(enabled = pasted.isNotBlank() && !syncing, onClick = { PolarApi.finishWithPasted(pasted) }) { Text("Verbinden") }
                 }
-            }) { Text(if (busy) "Warte auf Polar …" else "Mit Polar verbinden") }
+            }
         }
         status?.let { Text(it, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodySmall) }
-        if (PolarApi.debugFile(ctx).exists()) {
+        if (syncing) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp))
+        if (PolarApi.debugFile().exists()) {
             TextButton(onClick = {
                 try {
-                    val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", PolarApi.debugFile(ctx))
+                    val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", PolarApi.debugFile())
                     ctx.startActivity(
                         Intent.createChooser(
                             Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_STREAM, uri)

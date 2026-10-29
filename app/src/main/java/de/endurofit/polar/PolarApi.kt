@@ -15,7 +15,12 @@ import de.endurofit.data.Repo
 import de.endurofit.data.SessionType
 import de.endurofit.data.SleepEntry
 import de.endurofit.health.FitImport
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -61,70 +66,143 @@ object PolarApi {
         if (debug.length < 60_000) debug.append(line).append('\n')
     }
 
-    fun debugFile(ctx: Context): File = File(ctx.cacheDir, "polar_rohdaten.txt")
+    fun debugFile(): File = File(Repo.cacheDirPath(), "polar_rohdaten.txt")
 
     // ---------- Anmeldung ----------
 
+    /** Läuft unabhängig vom Bildschirm weiter, auch wenn du zwischendurch im Browser bist. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Statusmeldung für die Oberfläche. */
+    val status = MutableStateFlow<String?>(null)
+    val waiting = MutableStateFlow(false)
+    val isConnected = MutableStateFlow(false)
+    val syncing = MutableStateFlow(false)
+
+    @Volatile private var server: ServerSocket? = null
+    @Volatile private var loginJob: Job? = null
+
+    fun refreshConnected() { isConnected.value = connected }
+
     /**
-     * Öffnet die Polar-Anmeldung im Browser und wartet, bis Polar zur App zurückleitet.
-     * Die App lauscht dafür kurz auf localhost:5000 (wie im offiziellen Polar-Beispiel).
+     * Öffnet die Polar-Anmeldung im Browser. Polar leitet danach auf localhost:5000 zurück,
+     * wo die App kurz lauscht. Klappt das nicht ("Seite nicht erreichbar"), kann die Adresse
+     * aus dem Browser in die App eingefügt werden – siehe [finishWithPasted].
      */
-    suspend fun login(ctx: Context): String = withContext(Dispatchers.IO) {
+    fun startLogin(ctx: Context) {
         val id = Repo.polarClientId
         val secret = Repo.polarSecret
-        if (id.isBlank() || secret.isBlank()) throw PolarException("Bitte zuerst Client-ID und Client-Secret eintragen.")
-        val state = UUID.randomUUID().toString()
-
-        val server = try {
-            ServerSocket(PORT).apply { soTimeout = 5 * 60_000 }
-        } catch (e: Exception) {
-            throw PolarException("Port $PORT ist belegt – bitte App neu starten und nochmal versuchen.")
-        }
-        val code = server.use { srv ->
-            val url = "$AUTH?response_type=code&client_id=${enc(id)}&redirect_uri=${enc(REDIRECT)}&scope=accesslink.read_all&state=$state"
+        if (id.isBlank() || secret.isBlank()) { status.value = "❌ Bitte zuerst Client-ID und Client-Secret eintragen."; return }
+        loginJob?.cancel()
+        closeServer()
+        waiting.value = true
+        status.value = "Browser öffnet sich – bei Polar anmelden und zustimmen, dann zurück zu EnduroFit."
+        val appCtx = ctx.applicationContext
+        loginJob = scope.launch {
+            val srv = try {
+                ServerSocket(PORT).apply { soTimeout = 10 * 60_000 }
+            } catch (e: Exception) {
+                null
+            }
+            server = srv
+            val url = "$AUTH?response_type=code&client_id=${enc(id)}&redirect_uri=${enc(REDIRECT)}&scope=accesslink.read_all"
             withContext(Dispatchers.Main) {
-                ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                appCtx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
-            var found: String? = null
-            var error: String? = null
-            while (found == null && error == null) {
-                val sock = try {
-                    srv.accept()
-                } catch (e: SocketTimeoutException) {
-                    throw PolarException("Zeit abgelaufen – die Anmeldung wurde nicht abgeschlossen.")
-                }
-                sock.use { s ->
-                    s.soTimeout = 10_000
-                    val line = s.getInputStream().bufferedReader().readLine() ?: ""
-                    val path = line.split(" ").getOrNull(1) ?: ""
-                    val params = path.substringAfter('?', "").split('&').filter { '=' in it }
-                        .associate { it.substringBefore('=') to URLDecoder.decode(it.substringAfter('='), "UTF-8") }
-                    val ok = path.startsWith("/oauth2_callback") && params["state"] == state && params["code"] != null
-                    if (path.startsWith("/oauth2_callback")) {
-                        if (ok) found = params["code"] else error = params["error"] ?: "Anmeldung abgelehnt"
-                    }
-                    val html = if (ok) "<h2>✅ Verbunden!</h2><p>Du kannst jetzt zu EnduroFit zurückkehren.</p>"
-                    else "<h2>EnduroFit</h2><p>${if (path.startsWith("/oauth2_callback")) "Anmeldung fehlgeschlagen." else ""}</p>"
-                    val body = "<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width'></head>" +
-                        "<body style='font-family:sans-serif;padding:24px'>$html</body></html>"
-                    val bytes = body.toByteArray(Charsets.UTF_8)
-                    s.getOutputStream().apply {
-                        write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray())
-                        write(bytes); flush()
-                    }
-                }
+            if (srv == null) {
+                status.value = "Nach der Polar-Anmeldung die Adresse aus der Adresszeile des Browsers kopieren und unten einfügen."
+                return@launch
             }
-            found ?: throw PolarException("Polar hat die Anmeldung abgelehnt: $error")
+            val code = try { listen(srv) } catch (_: Exception) { null } finally { closeServer() }
+            if (code != null) finish(code)
         }
+    }
 
-        // Code gegen Zugangsschlüssel tauschen
+    /** Adresse (oder nur den Code) aus dem Browser einfügen, falls die Weiterleitung nicht ankam. */
+    fun finishWithPasted(text: String) {
+        val code = codeFrom(text)
+        if (code == null) { status.value = "❌ In dem Text ist kein Anmeldecode. Kopiere die ganze Adresse, die mit http://localhost:5000/oauth2_callback?code=… beginnt."; return }
+        loginJob?.cancel()
+        closeServer()
+        loginJob = scope.launch { finish(code) }
+    }
+
+    fun codeFrom(text: String): String? {
+        val t = text.trim()
+        Regex("""[?&]code=([^&\s#]+)""").find(t)?.let { return URLDecoder.decode(it.groupValues[1], "UTF-8") }
+        // Nur der Code selbst (ohne Adresse)
+        return t.takeIf { it.isNotEmpty() && !it.contains(' ') && !it.contains('/') && it.length >= 8 }
+    }
+
+    private fun closeServer() {
+        try { server?.close() } catch (_: Exception) {}
+        server = null
+    }
+
+    /** Wartet auf die Weiterleitung von Polar und gibt den Code zurück. */
+    private fun listen(srv: ServerSocket): String? {
+        while (true) {
+            val sock = try { srv.accept() } catch (e: SocketTimeoutException) { return null }
+            sock.use { s ->
+                s.soTimeout = 10_000
+                val line = s.getInputStream().bufferedReader().readLine() ?: ""
+                val path = line.split(" ").getOrNull(1) ?: ""
+                val isCallback = path.startsWith("/oauth2_callback")
+                val code = if (isCallback) codeFrom(path) else null
+                val html = when {
+                    code != null -> "<h2>✅ Fast fertig!</h2><p>Du kannst jetzt zu EnduroFit zurückkehren.</p>"
+                    isCallback -> "<h2>EnduroFit</h2><p>Polar hat die Anmeldung abgelehnt.</p>"
+                    else -> "<h2>EnduroFit</h2>"
+                }
+                val bytes = ("<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width'></head>" +
+                    "<body style='font-family:sans-serif;padding:24px'>$html</body></html>").toByteArray(Charsets.UTF_8)
+                s.getOutputStream().apply {
+                    write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                    write(bytes); flush()
+                }
+                if (isCallback) return code
+            }
+        }
+    }
+
+    private suspend fun finish(code: String) {
+        waiting.value = false
+        status.value = "Verbinde mit Polar …"
+        try {
+            exchange(code)
+            isConnected.value = true
+            status.value = "✅ Verbunden – hole die letzten 28 Tage …"
+            syncing.value = true
+            val r = sync(null, 28)
+            status.value = describe(r)
+        } catch (e: Exception) {
+            status.value = "❌ ${e.message}"
+        } finally {
+            syncing.value = false
+            refreshConnected()
+        }
+    }
+
+    fun describe(r: Result): String =
+        "✅ Trainings: ${r.trainings} · 24/7-Puls: ${r.hrDays} Tage · Erholung: ${r.recoveries} · Schlaf: ${r.nights} · Belastung: ${r.cardio}" +
+            if (r.errors.isNotEmpty()) "\n⚠️ " + r.errors.joinToString("\n⚠️ ") else ""
+
+    /** Code gegen Zugangsschlüssel tauschen und Nutzer registrieren. */
+    private fun exchange(code: String) {
+        val id = Repo.polarClientId
+        val secret = Repo.polarSecret
         val basic = Base64.encodeToString("$id:$secret".toByteArray(), Base64.NO_WRAP)
         val (tc, tb) = http(
             "POST", TOKEN, "grant_type=authorization_code&code=${enc(code)}&redirect_uri=${enc(REDIRECT)}",
             "application/x-www-form-urlencoded", "Basic $basic"
         )
-        log("TOKEN $tc ${String(tb).take(200).replace(Regex("\"access_token\"\\s*:\\s*\"[^\"]+\""), "\"access_token\":\"…\"")}")
-        if (tc !in 200..299) throw PolarException("Anmeldung fehlgeschlagen ($tc). Stimmen Client-ID, Secret und Redirect-URL?")
+        log("TOKEN $tc ${String(tb).take(300).replace(Regex("\"access_token\"\\s*:\\s*\"[^\"]+\""), "\"access_token\":\"…\"")}")
+        if (tc !in 200..299) {
+            throw PolarException(
+                if (tc == 400) "Der Anmeldecode ist abgelaufen oder wurde schon benutzt – bitte „Mit Polar verbinden“ nochmal tippen."
+                else "Anmeldung fehlgeschlagen ($tc). Stimmen Client-ID, Secret und Redirect-URL?"
+            )
+        }
         val tj = JSONObject(String(tb))
         Repo.polarToken = tj.getString("access_token")
         Repo.polarUserId = tj.opt("x_user_id")?.toString() ?: ""
@@ -132,13 +210,30 @@ object PolarApi {
         // Nutzer bei der Schnittstelle registrieren (409 = schon registriert)
         val (rc, rb) = http("POST", "$API/v3/users", JSONObject().put("member-id", "endurofit-${Repo.polarUserId}").toString(), "application/json")
         log("REGISTER $rc ${String(rb).take(300)}")
-        if (rc !in 200..299 && rc != 409) throw PolarException("Registrierung bei Polar fehlgeschlagen ($rc).")
-        "Mit Polar verbunden"
+        if (rc !in 200..299 && rc != 409) {
+            Repo.polarToken = ""
+            throw PolarException("Registrierung bei Polar fehlgeschlagen ($rc).")
+        }
+    }
+
+    /** Synchronisieren im Hintergrund (für Knöpfe in der Oberfläche). */
+    fun syncInBackground(ctx: Context, days: Int) {
+        if (syncing.value) return
+        val appCtx = ctx.applicationContext
+        scope.launch {
+            syncing.value = true
+            status.value = "Hole Daten von Polar …"
+            status.value = try { describe(sync(appCtx, days)) } catch (e: Exception) { "❌ ${e.message}" }
+            syncing.value = false
+            refreshConnected()
+        }
     }
 
     fun logout() {
         Repo.polarToken = ""
         Repo.polarUserId = ""
+        isConnected.value = false
+        status.value = null
     }
 
     // ---------- Synchronisieren ----------
@@ -148,9 +243,8 @@ object PolarApi {
         val errors: List<String>,
     )
 
-    suspend fun sync(ctx: Context, days: Int = 7): Result = withContext(Dispatchers.IO) {
+    suspend fun sync(ctx: Context?, days: Int = 7): Result = withContext(Dispatchers.IO) {
         if (!connected) throw PolarException("Nicht mit Polar verbunden.")
-        debug.setLength(0)
         val errors = ArrayList<String>()
         fun <T> step(name: String, block: () -> T): T? = try {
             block()
@@ -167,7 +261,8 @@ object PolarApi {
         val ex = step("Trainings") { syncExercises() } ?: 0
 
         Repo.polarLastSync = System.currentTimeMillis()
-        try { debugFile(ctx).writeText(debug.toString()) } catch (_: Exception) {}
+        if (debug.length > 50_000) debug.setLength(0)
+        try { debugFile().writeText(debug.toString()) } catch (_: Exception) {}
         Result(ex, hr, rec, nights, cardio, errors)
     }
 
