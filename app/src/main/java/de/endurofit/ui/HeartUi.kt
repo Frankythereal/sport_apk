@@ -33,6 +33,8 @@ object Nav {
     val analysisView = MutableStateFlow(0)
     /** Wird gesetzt, wenn Text geteilt wurde – dann zum Essen-Tab springen. */
     val openFood = MutableStateFlow(false)
+    /** Auftrag aus dem Essen-Widget: "photo", "manual" oder "paste". */
+    val foodAction = MutableStateFlow<String?>(null)
 }
 
 private val RestColor = Color(0xFFFF7043)

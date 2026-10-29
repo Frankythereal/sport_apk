@@ -61,6 +61,14 @@ fun FoodScreen() {
     LaunchedEffect(sharedText) {
         sharedText?.let { pasteText = it; paste = true; SharedFoodText.text.value = null }
     }
+    // Knöpfe aus dem Widget: Eintrag von Hand / Text einfügen
+    val widgetAct by Nav.foodAction.collectAsState()
+    LaunchedEffect(widgetAct) {
+        when (widgetAct) {
+            "manual" -> { Nav.foodAction.value = null; day = today; prefill = null; dialog = true }
+            "paste" -> { Nav.foodAction.value = null; day = today; pasteText = ""; paste = true }
+        }
+    }
     LaunchedEffect(deleted) { if (deleted != null) { delay(5000); deleted = null } }
 
     val next = Calc.addDays(day, 1)
@@ -128,7 +136,7 @@ fun FoodScreen() {
         // ---------- Eintragen ----------
         Appear(i++) {
             Column(Modifier.padding(bottom = 12.dp)) {
-                FoodPhotoButtons(day, asTiles = true, onManual = { prefill = null; dialog = true }, onPaste = { pasteText = ""; paste = true })
+                FoodPhotoButtons(day, asTiles = true, onManual = { prefill = null; dialog = true }, onPaste = { pasteText = ""; paste = true }, handleWidget = true)
                 if (recent.isNotEmpty()) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 10.dp)) {
                         items(recent) { f ->

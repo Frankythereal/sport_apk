@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">EnduroFit</string>
-    <string name="widget_today_name">EnduroFit Heute</string>
-    <string name="widget_today_desc">Erholung, Ruhepuls, Kalorien, Schritte und Trinken auf einen Blick</string>
-    <string name="widget_water_name">EnduroFit Trinken</string>
-    <string name="widget_water_desc">Trinkstand mit +250-ml-Knopf</string>
+    <string name="widget_today_name">EnduroFit Überblick</string>
+    <string name="widget_today_desc">Bilanz, Schritte, Trinken, Eiweiß – größer gezogen auch Schlaf, Erholung, Ruhepuls und Training</string>
+    <string name="widget_water_name">EnduroFit Essen &amp; Trinken</string>
+    <string name="widget_water_desc">Wasser mit einem Tipp eintragen, Essen per Foto, von Hand oder als Text</string>
+    <string name="widget_training_name">EnduroFit Training starten</string>
+    <string name="widget_training_desc">Enduro, Gym oder Sonstiges mit einem Tipp starten – die Verity Sense verbindet sich automatisch</string>
 </resources>

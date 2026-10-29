@@ -49,6 +49,23 @@ fun AppRoot() {
         if (files.isNotEmpty()) fitResult = FitImport.import(ctx, files)
     }
 
+    // Aufträge aus den Widgets
+    val widgetLink by de.endurofit.widget.WidgetLinks.pending.collectAsState()
+    LaunchedEffect(widgetLink) {
+        val w = widgetLink ?: return@LaunchedEffect
+        de.endurofit.widget.WidgetLinks.pending.value = null
+        when {
+            w == "today" -> tab = 0
+            w == "food" -> tab = 2
+            w.startsWith("food_") -> { Nav.foodAction.value = w.removePrefix("food_"); tab = 2 }
+            w == "training" -> tab = 1
+            w.startsWith("start_") -> {
+                tab = 1
+                startFromWidget(ctx, de.endurofit.data.SessionType.of(w.removePrefix("start_")))
+            }
+        }
+    }
+
     val openFood by Nav.openFood.collectAsState()
     LaunchedEffect(openFood) {
         if (openFood) { tab = 2; Nav.openFood.value = false }
@@ -109,4 +126,17 @@ fun AppRoot() {
             onDismiss = { fitResult = null },
         )
     }
+}
+
+
+/** Training aus dem Widget starten: Aufnahme beginnen und die zuletzt benutzte Verity Sense verbinden. */
+private fun startFromWidget(ctx: android.content.Context, type: de.endurofit.data.SessionType) {
+    if (de.endurofit.hr.Recorder.live.value == null) de.endurofit.hr.Recorder.start(type)
+    val addr = Repo.lastDeviceAddress ?: return
+    if (de.endurofit.hr.HrState.conn.value != de.endurofit.hr.HrState.Conn.IDLE) return
+    val perms = if (android.os.Build.VERSION.SDK_INT >= 31)
+        listOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_CONNECT)
+    else listOf(android.Manifest.permission.ACCESS_FINE_LOCATION)
+    val ok = perms.all { androidx.core.content.ContextCompat.checkSelfPermission(ctx, it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
+    if (ok) de.endurofit.hr.HrService.connect(ctx, addr)
 }

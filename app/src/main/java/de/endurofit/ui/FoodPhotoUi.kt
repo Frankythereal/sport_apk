@@ -41,7 +41,7 @@ import kotlin.math.roundToInt
 
 /** Knöpfe "Foto" und "Galerie" plus der ganze Ablauf bis zum Speichern. */
 @Composable
-fun FoodPhotoButtons(day: Long, asTiles: Boolean = false, onManual: (() -> Unit)? = null, onPaste: (() -> Unit)? = null) {
+fun FoodPhotoButtons(day: Long, asTiles: Boolean = false, onManual: (() -> Unit)? = null, onPaste: (() -> Unit)? = null, handleWidget: Boolean = false) {
     val ctx = LocalContext.current
     var photo by remember { mutableStateOf<Uri?>(null) }
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
@@ -72,6 +72,14 @@ fun FoodPhotoButtons(day: Long, asTiles: Boolean = false, onManual: (() -> Unit)
         }
     }
     fun openGallery() = gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+
+    // Knopf „Foto“ im Widget gedrückt → Kamera direkt öffnen
+    if (handleWidget) {
+        val act by Nav.foodAction.collectAsState()
+        LaunchedEffect(act) {
+            if (act == "photo") { Nav.foodAction.value = null; openCamera() }
+        }
+    }
 
     if (asTiles) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -33,7 +33,7 @@ class App : Application() {
         // Widgets aktualisieren, sobald sich etwas ändert (Trinken, Essen, Schritte, Erholung …)
         appScope.launch {
             kotlinx.coroutines.flow.merge(
-                Repo.water, Repo.food, Repo.steps, Repo.recovery, Repo.dayHr, Repo.goals, Repo.sessions, Repo.sick,
+                Repo.water, Repo.food, Repo.steps, Repo.recovery, Repo.dayHr, Repo.goals, Repo.sessions, Repo.sick, de.endurofit.hr.Recorder.live,
             ).drop(1).debounce(1500).collect { de.endurofit.widget.Widgets.updateAll(this@App) }
         }
         // Kartendienst (OpenStreetMap) braucht eine Kennung und einen Zwischenspeicher
@@ -62,6 +62,11 @@ class MainActivity : ComponentActivity() {
 
     /** FIT-Dateien, die aus der Suunto-App geteilt wurden, zum Import vormerken. */
     private fun takeShared(intent: Intent?) {
+        // Knopf in einem Widget gedrückt
+        de.endurofit.widget.WidgetLinks.from(intent)?.let {
+            de.endurofit.widget.WidgetLinks.pending.value = it
+            return
+        }
         val uris = FitImport.urisFrom(intent)
         if (uris.isNotEmpty()) {
             FitImport.pending.value = FitImport.pending.value + uris
