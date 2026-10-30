@@ -140,29 +140,42 @@ private fun open(ctx: Context, what: String): Action =
 
 /** Fortschrittsbalken aus 10 Segmenten – Glance kennt keine Prozent-Breiten. */
 @Composable
-private fun Segments(frac: Float, color: ColorProvider) {
+private fun Segments(frac: Float, color: ColorProvider, h: androidx.compose.ui.unit.Dp = 4.dp) {
     val n = (frac.coerceIn(0f, 1f) * 10).roundToInt()
-    Row(GlanceModifier.fillMaxWidth().height(4.dp)) {
+    Row(GlanceModifier.fillMaxWidth().height(h)) {
         for (i in 0 until 10) {
-            Box(GlanceModifier.defaultWeight().height(4.dp).padding(end = if (i < 9) 1.dp else 0.dp)) {
+            Box(GlanceModifier.defaultWeight().height(h).padding(end = if (i < 9) 1.dp else 0.dp)) {
                 Box(GlanceModifier.fillMaxSize().cornerRadius(1.dp).background(if (i < n) color else Track)) {}
             }
         }
     }
 }
 
+/** Schriftgrößen passend zur Widget-Größe – je größer gezogen, desto größer die Schrift. */
+private data class Sz(val value: Float, val label: Float, val bar: Float)
+
+/** [rows] Zeilen à [cols] Spalten auf der aktuellen Fläche */
+@Composable
+private fun sizing(cols: Int, rows: Int): Sz {
+    val s = LocalSize.current
+    val byHeight = ((s.height.value - 16) / rows) / 3.2f
+    val byWidth = ((s.width.value - 16) / cols) / 4.6f
+    val v = minOf(byHeight, byWidth).coerceIn(13f, 30f)
+    return Sz(v, (v * 0.62f).coerceIn(10f, 17f), (v / 3.2f).coerceIn(4f, 9f))
+}
+
 /** Eine Kennzahl: Emoji + Wert, darunter kurze Beschriftung und Balken. */
 @Composable
-private fun Metric(emoji: String, value: String, label: String, frac: Float?, color: ColorProvider, modifier: GlanceModifier) {
+private fun Metric(emoji: String, value: String, label: String, frac: Float?, color: ColorProvider, modifier: GlanceModifier, sz: Sz = Sz(13f, 10f, 4f)) {
     Column(modifier.padding(horizontal = 3.dp)) {
         Text(
             "$emoji $value",
-            style = TextStyle(color = color, fontWeight = FontWeight.Bold, fontSize = 13.sp),
+            style = TextStyle(color = color, fontWeight = FontWeight.Bold, fontSize = sz.value.sp),
             maxLines = 1,
         )
-        Text(label, style = TextStyle(color = Grey, fontSize = 10.sp), maxLines = 1)
-        Spacer(GlanceModifier.height(3.dp))
-        if (frac != null) Segments(frac, color) else Spacer(GlanceModifier.height(4.dp))
+        Text(label, style = TextStyle(color = Grey, fontSize = sz.label.sp), maxLines = 1)
+        Spacer(GlanceModifier.height((sz.bar * 0.8f).dp))
+        if (frac != null) Segments(frac, color, sz.bar.dp) else Spacer(GlanceModifier.height(sz.bar.dp))
     }
 }
 
@@ -178,7 +191,7 @@ private fun Key(text: String, sub: String?, color: ColorProvider, action: Action
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(text, style = TextStyle(color = color, fontWeight = FontWeight.Bold, fontSize = size, textAlign = TextAlign.Center), maxLines = 1)
-            if (sub != null) Text(sub, style = TextStyle(color = Grey, fontSize = 10.sp, textAlign = TextAlign.Center), maxLines = 1)
+            if (sub != null) Text(sub, style = TextStyle(color = Grey, fontSize = (size.value * 0.6f).coerceIn(10f, 14f).sp, textAlign = TextAlign.Center), maxLines = 1)
         }
     }
 }
@@ -190,7 +203,7 @@ private fun Frame(content: @Composable () -> Unit) {
     }
 }
 
-private val SIZES = SizeMode.Responsive(setOf(DpSize(250.dp, 60.dp), DpSize(250.dp, 120.dp)))
+private val SIZES = SizeMode.Exact
 
 // ------------------------------------------------------------------ 1) Überblick (kompakt)
 
@@ -205,6 +218,7 @@ class TodayWidget : GlanceAppWidget() {
 @Composable
 private fun OverviewContent(ctx: Context, d: WidgetData) {
     val tall = LocalSize.current.height >= 110.dp
+    val sz = sizing(4, if (tall) 2 else 1)
     Frame {
         Column(GlanceModifier.fillMaxSize().clickable(open(ctx, "today")), verticalAlignment = Alignment.CenterVertically) {
             Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -213,43 +227,43 @@ private fun OverviewContent(ctx: Context, d: WidgetData) {
                     "⚖️", if (bal == null) "–" else (if (bal < 0) "−" else "+") + Calc.fmtNum(abs(bal)),
                     if (bal == null) "kcal Bilanz" else "Bilanz",
                     null, if (bal == null) White else if (bal <= 0) Green else Orange,
-                    GlanceModifier.defaultWeight(),
+                    GlanceModifier.defaultWeight(), sz,
                 )
                 Metric(
                     "👣", k(d.steps), if (d.sick) "krank – Pause" else "von ${k(d.stepGoal)}",
                     d.steps.toFloat() / d.stepGoal.coerceAtLeast(1),
-                    if (d.steps >= d.stepGoal) Green else Orange, GlanceModifier.defaultWeight(),
+                    if (d.steps >= d.stepGoal) Green else Orange, GlanceModifier.defaultWeight(), sz,
                 )
                 Metric(
                     "💧", liters(d.waterMl), "von ${liters(d.waterGoal)} l",
                     d.waterMl.toFloat() / d.waterGoal.coerceAtLeast(1),
-                    if (d.waterMl >= d.waterGoal) Green else Blue, GlanceModifier.defaultWeight(),
+                    if (d.waterMl >= d.waterGoal) Green else Blue, GlanceModifier.defaultWeight(), sz,
                 )
                 Metric(
                     "🥩", "${d.protein.roundToInt()}g", "von ${d.proteinGoal.roundToInt()} g",
                     (d.protein / d.proteinGoal.coerceAtLeast(1.0)).toFloat(),
-                    if (d.protein >= d.proteinGoal) Green else Yellow, GlanceModifier.defaultWeight(),
+                    if (d.protein >= d.proteinGoal) Green else Yellow, GlanceModifier.defaultWeight(), sz,
                 )
             }
             if (tall) {
-                Spacer(GlanceModifier.height(8.dp))
+                Spacer(GlanceModifier.height((sz.value * 0.9f).dp))
                 Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Metric(
                         "😴", d.sleepMs?.let { hm(it) } ?: "–", "Schlaf",
                         d.sleepMs?.let { it.toFloat() / d.sleepGoalMs.coerceAtLeast(1) },
-                        if ((d.sleepMs ?: 0) >= d.sleepGoalMs) Green else Purple, GlanceModifier.defaultWeight(),
+                        if ((d.sleepMs ?: 0) >= d.sleepGoalMs) Green else Purple, GlanceModifier.defaultWeight(), sz,
                     )
                     Metric(
                         "🔋", de.endurofit.ui.rechargeText(d.recovery), "Erholung", null,
                         when (d.recovery) { null -> White; 1, 2 -> Red; 3 -> Orange; else -> Green },
-                        GlanceModifier.defaultWeight(),
+                        GlanceModifier.defaultWeight(), sz,
                     )
-                    Metric("❤️", d.resting?.toString() ?: "–", "Ruhepuls", null, White, GlanceModifier.defaultWeight())
+                    Metric("❤️", d.resting?.toString() ?: "–", "Ruhepuls", null, White, GlanceModifier.defaultWeight(), sz)
                     Metric(
                         if (d.liveType != null) "⏺" else "🏍️",
                         if (d.liveType != null) "läuft" else "${d.trainingMin}′",
                         if (d.liveType != null) d.liveType.label else if (d.trainingMin > 0) "${Calc.fmtNum(d.trainingKcal)} kcal" else "Training",
-                        null, if (d.liveType != null) Red else White, GlanceModifier.defaultWeight(),
+                        null, if (d.liveType != null) Red else White, GlanceModifier.defaultWeight(), sz,
                     )
                 }
             }
@@ -276,6 +290,8 @@ private val ML = ActionParameters.Key<Int>("ml")
 @Composable
 private fun FoodWaterContent(ctx: Context, d: WidgetData) {
     val tall = LocalSize.current.height >= 110.dp
+    val hs = (LocalSize.current.width.value / 22f).coerceIn(12f, 17f).sp
+    val ks = (LocalSize.current.height.value / (if (tall) 7f else 4.5f)).coerceIn(15f, 26f).sp
     Frame {
         Column(GlanceModifier.fillMaxSize()) {
             Row(
@@ -284,26 +300,26 @@ private fun FoodWaterContent(ctx: Context, d: WidgetData) {
             ) {
                 Text(
                     "💧 ${liters(d.waterMl)}/${liters(d.waterGoal)} l",
-                    style = TextStyle(color = if (d.waterMl >= d.waterGoal) Green else Blue, fontWeight = FontWeight.Bold, fontSize = 12.sp),
+                    style = TextStyle(color = if (d.waterMl >= d.waterGoal) Green else Blue, fontWeight = FontWeight.Bold, fontSize = hs),
                     modifier = GlanceModifier.defaultWeight(), maxLines = 1,
                 )
                 Text(
                     "🍽️ ${Calc.fmtNum(d.eaten)} kcal · 🥩 ${d.protein.roundToInt()} g",
-                    style = TextStyle(color = White, fontSize = 12.sp), maxLines = 1,
+                    style = TextStyle(color = White, fontSize = hs), maxLines = 1,
                 )
             }
             Spacer(GlanceModifier.height(4.dp))
             val water = @Composable { m: GlanceModifier ->
-                Key("+250", "💧 ml", Blue, actionRunCallback<AddWaterAction>(actionParametersOf(ML to 250)), m)
-                Key("+500", "💧 ml", Blue, actionRunCallback<AddWaterAction>(actionParametersOf(ML to 500)), m)
+                Key("+250", "💧 ml", Blue, actionRunCallback<AddWaterAction>(actionParametersOf(ML to 250)), m, size = ks)
+                Key("+500", "💧 ml", Blue, actionRunCallback<AddWaterAction>(actionParametersOf(ML to 500)), m, size = ks)
             }
             val food = @Composable { m: GlanceModifier ->
-                Key("📷", "Foto", Orange, open(ctx, "food_photo"), m)
-                Key("✏️", "Eintrag", Green, open(ctx, "food_manual"), m)
-                Key("📋", "Text", Yellow, open(ctx, "food_paste"), m)
+                Key("📷", "Foto", Orange, open(ctx, "food_photo"), m, size = ks)
+                Key("✏️", "Eintrag", Green, open(ctx, "food_manual"), m, size = ks)
+                Key("📋", "Text", Yellow, open(ctx, "food_paste"), m, size = ks)
             }
             if (tall) {
-                Row(GlanceModifier.fillMaxWidth().defaultWeight()) { water(GlanceModifier.defaultWeight()); Key("+1 l", "💧", Blue, actionRunCallback<AddWaterAction>(actionParametersOf(ML to 1000)), GlanceModifier.defaultWeight()) }
+                Row(GlanceModifier.fillMaxWidth().defaultWeight()) { water(GlanceModifier.defaultWeight()); Key("+1 l", "💧", Blue, actionRunCallback<AddWaterAction>(actionParametersOf(ML to 1000)), GlanceModifier.defaultWeight(), size = ks) }
                 Spacer(GlanceModifier.height(4.dp))
                 Row(GlanceModifier.fillMaxWidth().defaultWeight()) { food(GlanceModifier.defaultWeight()) }
             } else {
