@@ -195,6 +195,9 @@ fun FoodScreen() {
             }
         }
 
+        // ---------- Tabletten ----------
+        if (day == today) Appear(i++) { SuppCard(collapsed = true) }
+
         // ---------- Mahlzeiten ----------
         if (entries.isEmpty()) {
             Appear(i++) {

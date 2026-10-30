@@ -39,7 +39,7 @@ private val ActiveGreen = Color(0xFF66BB6A)
 private val KcalYellow = Color(0xFFFFCA28)
 private val SleepPurple = Color(0xFF7E57C2)
 
-private enum class Detail { KCAL, GOALS, SLEEP, RECOVERY, HEART, VITALS, TRAINING, WATER, WEIGHT }
+private enum class Detail { KCAL, GOALS, SLEEP, RECOVERY, HEART, VITALS, TRAINING, WATER, WEIGHT, SUPPS }
 
 @Composable
 fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit, onOpenHeart: () -> Unit = {}) {
@@ -263,6 +263,13 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit, onO
             }
         }
 
+        // ---------- Tabletten ----------
+        Appear(i++) {
+            Tile(Modifier.fillMaxWidth().padding(bottom = 12.dp), title = "💊 Tabletten", accent = PillColor, onClick = { detail = Detail.SUPPS }) {
+                SuppTileContent()
+            }
+        }
+
         // ---------- Gewicht ----------
         Appear(i++) {
             Tile(Modifier.fillMaxWidth().padding(bottom = 12.dp), title = "⚖️ Gewicht", accent = WeightTeal, onClick = { detail = Detail.WEIGHT }) {
@@ -325,6 +332,7 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit, onO
                     Detail.HEART -> HeartTodayCard(onHistory = { detail = null; onOpenHeart() })
                     Detail.VITALS -> Spo2Card()
                     Detail.WEIGHT -> WeightCard()
+                    Detail.SUPPS -> SuppCard()
                     Detail.WATER -> SectionCard("💧 Trinken") {
                         Text("${Calc.fmtNum(d.waterMl / 1000.0, 2)} l von ${Calc.fmtNum(d.waterGoal / 1000.0, 1)} l", fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(8.dp))

@@ -64,6 +64,12 @@ object Repo {
     /** Wiegungen, neueste zuerst */
     val weights: StateFlow<List<WeightEntry>> = _weights
 
+    private val _supps = MutableStateFlow<List<Supplement>>(emptyList())
+    val supps: StateFlow<List<Supplement>> = _supps
+    private val _suppIntakes = MutableStateFlow<List<SuppIntake>>(emptyList())
+    /** Einnahmen, neueste zuerst */
+    val suppIntakes: StateFlow<List<SuppIntake>> = _suppIntakes
+
     private val _goals = MutableStateFlow(Goals())
     val goals: StateFlow<Goals> = _goals
 
@@ -96,6 +102,9 @@ object Repo {
         _skin.value = loadList("skin.json") { SkinTemp.fromJson(it) }.associateBy { it.day }
         _ecg.value = loadList("ecg.json") { Ecg.fromJson(it) }.sortedByDescending { it.t }
         _weights.value = loadList("weights.json") { WeightEntry.fromJson(it) }.sortedByDescending { it.t }
+        // Beim ersten Start deine Präparate vom Foto anlegen
+        _supps.value = if (File(baseDir, "supps.json").exists()) loadList("supps.json") { Supplement.fromJson(it) } else SuppPresets.all
+        _suppIntakes.value = loadList("supp_intakes.json") { SuppIntake.fromJson(it) }.sortedByDescending { it.t }
         File(baseDir, "watchbody.json").takeIf { it.exists() }?.let {
             try { _watchBody.value = WatchBody.fromJson(JSONObject(it.readText())) } catch (_: Exception) {}
         }
@@ -252,6 +261,48 @@ object Repo {
     }
 
     // ---------- Blutsauerstoff ----------
+
+    // ---------- Nahrungsergänzung ----------
+
+    @Synchronized
+    fun saveSupp(x: Supplement) {
+        _supps.value = if (_supps.value.any { it.id == x.id }) _supps.value.map { if (it.id == x.id) x else it } else _supps.value + x
+        saveList("supps.json", _supps.value) { it.toJson() }
+    }
+
+    @Synchronized
+    fun deleteSupp(id: String) {
+        _supps.value = _supps.value.filter { it.id != id }
+        saveList("supps.json", _supps.value) { it.toJson() }
+    }
+
+    /** Einnahme eintragen und den Vorrat herunterzählen. */
+    @Synchronized
+    fun takeSupp(suppId: String, units: Int = 1, t: Long = System.currentTimeMillis()): SuppIntake {
+        val i = SuppIntake("si_${System.nanoTime()}", t, suppId, units)
+        _suppIntakes.value = (_suppIntakes.value + i).sortedByDescending { it.t }
+        saveList("supp_intakes.json", _suppIntakes.value) { it.toJson() }
+        _supps.value.firstOrNull { it.id == suppId }?.let { saveSupp(it.copy(stock = (it.stock - units).coerceAtLeast(0))) }
+        return i
+    }
+
+    @Synchronized
+    fun deleteSuppIntake(id: String) {
+        val i = _suppIntakes.value.firstOrNull { it.id == id } ?: return
+        _suppIntakes.value = _suppIntakes.value.filter { it.id != id }
+        saveList("supp_intakes.json", _suppIntakes.value) { it.toJson() }
+        _supps.value.firstOrNull { it.id == i.suppId }?.let { saveSupp(it.copy(stock = it.stock + i.units)) }
+    }
+
+    /** Erinnerungen an Tabletten */
+    var suppReminders: Boolean
+        get() = prefs.getBoolean("supp_reminders", true)
+        set(v) = prefs.edit().putBoolean("supp_reminders", v).apply()
+
+    /** Einnahmen zusätzlich in den Handy-Kalender eintragen */
+    var suppCalendar: Boolean
+        get() = prefs.getBoolean("supp_calendar", false)
+        set(v) = prefs.edit().putBoolean("supp_calendar", v).apply()
 
     // ---------- Gewicht ----------
 

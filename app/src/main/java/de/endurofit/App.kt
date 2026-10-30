@@ -30,10 +30,11 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         Repo.init(this)
+        de.endurofit.supp.SuppReminders.schedule(this)
         // Widgets aktualisieren, sobald sich etwas ändert (Trinken, Essen, Schritte, Erholung …)
         appScope.launch {
             kotlinx.coroutines.flow.merge(
-                Repo.water, Repo.food, Repo.steps, Repo.recovery, Repo.dayHr, Repo.goals, Repo.sessions, Repo.sick, de.endurofit.hr.Recorder.live,
+                Repo.water, Repo.food, Repo.steps, Repo.recovery, Repo.dayHr, Repo.goals, Repo.sessions, Repo.sick, de.endurofit.hr.Recorder.live, Repo.suppIntakes,
             ).drop(1).debounce(1500).collect { de.endurofit.widget.Widgets.updateAll(this@App) }
         }
         // Kartendienst (OpenStreetMap) braucht eine Kennung und einen Zwischenspeicher

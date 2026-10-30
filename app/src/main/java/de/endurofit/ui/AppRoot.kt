@@ -56,7 +56,7 @@ fun AppRoot() {
         de.endurofit.widget.WidgetLinks.pending.value = null
         when {
             w == "today" -> tab = 0
-            w == "food" -> tab = 2
+            w == "food" || w == "supps" -> tab = 2
             w.startsWith("food_") -> { Nav.foodAction.value = w.removePrefix("food_"); tab = 2 }
             w == "training" -> tab = 1
             w.startsWith("start_") -> {
