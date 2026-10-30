@@ -443,3 +443,34 @@ data class WatchBody(
         )
     }
 }
+
+// ---------- Gewicht (Waage) ----------
+
+/**
+ * Eine Wiegung. [source]: "scale" = Beurer-Waage direkt per Bluetooth, "manual" = von Hand,
+ * sonst der Paketname der App aus Health Connect.
+ */
+data class WeightEntry(
+    val id: String,
+    val t: Long,
+    val kg: Double,
+    val fatPct: Double? = null,
+    val musclePct: Double? = null,
+    val waterPct: Double? = null,
+    val boneKg: Double? = null,
+    val source: String = "manual",
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id); put("t", t); put("kg", kg); put("src", source)
+        fatPct?.let { put("fat", it) }; musclePct?.let { put("mus", it) }
+        waterPct?.let { put("wat", it) }; boneKg?.let { put("bone", it) }
+    }
+
+    companion object {
+        private fun JSONObject.d(k: String) = if (has(k)) optDouble(k).takeIf { !it.isNaN() } else null
+        fun fromJson(o: JSONObject) = WeightEntry(
+            o.getString("id"), o.getLong("t"), o.optDouble("kg"),
+            o.d("fat"), o.d("mus"), o.d("wat"), o.d("bone"), o.optString("src", "manual"),
+        )
+    }
+}

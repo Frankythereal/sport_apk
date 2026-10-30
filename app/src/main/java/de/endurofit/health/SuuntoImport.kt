@@ -54,6 +54,8 @@ object SuuntoImport {
         HealthPermission.getReadPermission(SleepSessionRecord::class),
         HealthPermission.getReadPermission(OxygenSaturationRecord::class),
         HealthPermission.getReadPermission(RestingHeartRateRecord::class),
+        HealthPermission.getReadPermission(androidx.health.connect.client.records.WeightRecord::class),
+        HealthPermission.getReadPermission(androidx.health.connect.client.records.BodyFatRecord::class),
         ROUTE_PERMISSION,
     )
 
@@ -121,6 +123,11 @@ object SuuntoImport {
             importDayHr(ctx, client, start, end)
         } catch (e: Exception) {
             Log.w(TAG, "Tagespuls-Import fehlgeschlagen", e); 0
+        }
+        try {
+            importWeight(ctx, client, range)
+        } catch (e: Exception) {
+            Log.w(TAG, "Gewicht-Import fehlgeschlagen", e)
         }
         Repo.lastImport = System.currentTimeMillis()
         val todaySource = Repo.steps.value[Calc.dayStart(System.currentTimeMillis())]?.source
@@ -309,6 +316,27 @@ object SuuntoImport {
             .forEach { Repo.deleteSleep(it.id) }
         Repo.saveSleepBatch(entries)
         return entries.size
+    }
+
+    // ---------- Gewicht (z. B. aus der Beurer-App oder Polar Flow) ----------
+
+    private suspend fun importWeight(ctx: Context, client: HealthConnectClient, range: TimeRangeFilter): Int {
+        val granted = client.permissionController.getGrantedPermissions()
+        if (HealthPermission.getReadPermission(androidx.health.connect.client.records.WeightRecord::class) !in granted) return 0
+        val weights = client.readRecords(ReadRecordsRequest(androidx.health.connect.client.records.WeightRecord::class, range)).records
+            .filter { it.metadata.dataOrigin.packageName != ctx.packageName }
+        if (weights.isEmpty()) return 0
+        val fats = if (HealthPermission.getReadPermission(androidx.health.connect.client.records.BodyFatRecord::class) in granted)
+            client.readRecords(ReadRecordsRequest(androidx.health.connect.client.records.BodyFatRecord::class, range)).records
+        else emptyList()
+        val list = weights.map { w ->
+            val t = w.time.toEpochMilli()
+            val fat = fats.minByOrNull { kotlin.math.abs(it.time.toEpochMilli() - t) }
+                ?.takeIf { kotlin.math.abs(it.time.toEpochMilli() - t) < 10 * 60_000 }?.percentage?.value
+            de.endurofit.data.WeightEntry("hc_" + w.metadata.id, t, w.weight.inKilograms, fatPct = fat, source = w.metadata.dataOrigin.packageName)
+        }
+        Repo.addWeights(list)
+        return list.size
     }
 
     // ---------- Blutsauerstoff ----------

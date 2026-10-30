@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlin.math.abs
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -59,6 +60,10 @@ object Repo {
     private val _sick = MutableStateFlow<List<SickPeriod>>(emptyList())
     val sick: StateFlow<List<SickPeriod>> = _sick
 
+    private val _weights = MutableStateFlow<List<WeightEntry>>(emptyList())
+    /** Wiegungen, neueste zuerst */
+    val weights: StateFlow<List<WeightEntry>> = _weights
+
     private val _goals = MutableStateFlow(Goals())
     val goals: StateFlow<Goals> = _goals
 
@@ -90,6 +95,7 @@ object Repo {
         _cardio.value = loadList("cardio.json") { CardioLoad.fromJson(it) }.associateBy { it.day }
         _skin.value = loadList("skin.json") { SkinTemp.fromJson(it) }.associateBy { it.day }
         _ecg.value = loadList("ecg.json") { Ecg.fromJson(it) }.sortedByDescending { it.t }
+        _weights.value = loadList("weights.json") { WeightEntry.fromJson(it) }.sortedByDescending { it.t }
         File(baseDir, "watchbody.json").takeIf { it.exists() }?.let {
             try { _watchBody.value = WatchBody.fromJson(JSONObject(it.readText())) } catch (_: Exception) {}
         }
@@ -188,7 +194,8 @@ object Repo {
             val np = p.copy(
                 maxHr = merged.maxHr?.takeIf { it in 120..230 } ?: p.maxHr,
                 restHr = merged.restHr?.takeIf { it in 30..110 } ?: p.restHr,
-                weightKg = merged.weightKg?.takeIf { it in 30.0..250.0 } ?: p.weightKg,
+                // Gewicht von der Uhr nur, solange es keine Wiegungen gibt
+                weightKg = merged.weightKg?.takeIf { it in 30.0..250.0 && _weights.value.isEmpty() } ?: p.weightKg,
             )
             if (np != p) saveProfile(np)
         }
@@ -245,6 +252,60 @@ object Repo {
     }
 
     // ---------- Blutsauerstoff ----------
+
+    // ---------- Gewicht ----------
+
+    /**
+     * Neue Wiegungen speichern. Gleiche ID ersetzt; dieselbe Wiegung aus einer anderen Quelle
+     * (z. B. Waage direkt und zusätzlich über Health Connect) wird nicht doppelt gezählt.
+     */
+    @Synchronized
+    fun addWeights(list: List<WeightEntry>) {
+        if (list.isEmpty()) return
+        var cur = _weights.value
+        for (w in list) {
+            val same = cur.firstOrNull { it.id == w.id }
+                ?: cur.firstOrNull { abs(it.t - w.t) < 5 * 60_000 && abs(it.kg - w.kg) < 0.3 }
+            cur = if (same == null) cur + w else {
+                // Werte zusammenführen, die Waage direkt hat Vorrang
+                val keep = if (same.source == "scale" && w.source != "scale") same else w
+                val other = if (keep === same) w else same
+                cur.filter { it.id != same.id } + keep.copy(
+                    fatPct = keep.fatPct ?: other.fatPct,
+                    musclePct = keep.musclePct ?: other.musclePct,
+                    waterPct = keep.waterPct ?: other.waterPct,
+                    boneKg = keep.boneKg ?: other.boneKg,
+                )
+            }
+        }
+        _weights.value = cur.sortedByDescending { it.t }
+        saveList("weights.json", _weights.value) { it.toJson() }
+        // Neuestes Gewicht ins Profil übernehmen (für Grundumsatz & Kalorien)
+        _weights.value.firstOrNull()?.let { latest ->
+            val p = _profile.value
+            if (latest.kg in 30.0..250.0 && abs(p.weightKg - latest.kg) >= 0.05) saveProfile(p.copy(weightKg = Math.round(latest.kg * 10) / 10.0))
+        }
+    }
+
+    @Synchronized
+    fun deleteWeight(id: String) {
+        _weights.value = _weights.value.filter { it.id != id }
+        saveList("weights.json", _weights.value) { it.toJson() }
+    }
+
+    /** Gekoppelte Waage und ihr Benutzerplatz (mit Zugangscode) */
+    var scaleAddress: String?
+        get() = prefs.getString("scale_address", null)
+        set(v) = prefs.edit().putString("scale_address", v).apply()
+    var scaleName: String?
+        get() = prefs.getString("scale_name", null)
+        set(v) = prefs.edit().putString("scale_name", v).apply()
+    var scaleUserIndex: Int
+        get() = prefs.getInt("scale_user", -1)
+        set(v) = prefs.edit().putInt("scale_user", v).apply()
+    var scaleConsent: Int
+        get() = prefs.getInt("scale_consent", -1)
+        set(v) = prefs.edit().putInt("scale_consent", v).apply()
 
     @Synchronized
     fun addSpo2(list: List<Spo2Entry>) {

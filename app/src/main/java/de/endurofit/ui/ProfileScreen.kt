@@ -97,10 +97,13 @@ fun ProfileScreen(onOpenSession: (String) -> Unit = {}) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     StatusPill("Polar", polarOn)
                     StatusPill("Sensor", Repo.lastDeviceAddress != null)
+                    StatusPill("Waage", Repo.scaleAddress != null)
                     StatusPill("Foto-KI", Repo.claudeKey.isNotBlank())
                 }
             }
         }
+
+        WeightCard()
 
         SectionCard("👤 Deine Daten", collapsible = true, startOpen = false, subtitle = "Alter, Gewicht, Größe, Puls") {
             Hint("Damit rechnet die App Kalorien, Grundumsatz und Pulszonen.")
