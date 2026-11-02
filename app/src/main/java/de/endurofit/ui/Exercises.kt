@@ -121,7 +121,7 @@ object ExerciseLib {
         Exercise(
             "quad", "Oberschenkel dehnen", ExCat.DEHNEN, 60, "je Seite 30 Sek.",
             listOf("Stehen, mit einer Hand am Tisch abstützen.", "Ferse zum Po ziehen, Fuß mit der Hand greifen.", "Knie zeigen nach unten, Hüfte leicht nach vorn.", "30 Sek. halten, Seite wechseln."),
-            listOf(S0, S0.copy(lt = 5f, ls = 195f, la = -6f, lf = -6f, ra = 60f, rf = 70f)), periodMs = 6000, search = "Oberschenkel dehnen stehend",
+            listOf(S0, S0.copy(lt = 0f, ls = 210f, la = -12f, lf = -25f, ra = 60f, rf = 70f)), periodMs = 6000, search = "Oberschenkel dehnen stehend",
         ),
         Exercise(
             "vorbeuge", "Vorbeuge", ExCat.DEHNEN, 30, "30 Sekunden",
