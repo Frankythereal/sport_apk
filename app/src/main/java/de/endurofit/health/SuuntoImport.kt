@@ -79,7 +79,8 @@ object SuuntoImport {
     private fun isGarmin(pkg: String) = pkg.startsWith("com.garmin")
 
     /** Daten von einer Sportuhr (nicht vom Handy) – werden bevorzugt. */
-    fun isWatch(pkg: String) = isSuunto(pkg) || isPolar(pkg) || isGarmin(pkg) || pkg.contains("coros", true)
+    fun isWatch(pkg: String) = isSuunto(pkg) || isPolar(pkg) || isGarmin(pkg) || pkg.contains("coros", true) ||
+        de.endurofit.data.Watches.isWatchPackage(pkg)
 
     data class Result(
         val imported: Int,
@@ -262,7 +263,7 @@ object SuuntoImport {
 
         val list = acc.map { (day, bySource) ->
             val best = bySource.entries.sortedWith(
-                compareByDescending<Map.Entry<String, DoubleArray>> { isWatch(it.key) }.thenByDescending { it.value[0] }
+                compareByDescending<Map.Entry<String, DoubleArray>> { de.endurofit.data.Watches.isSelected(it.key) }.thenByDescending { isWatch(it.key) }.thenByDescending { it.value[0] }
             ).first()
             DaySteps(day, best.value[0].roundToInt(), best.value[1].roundToInt(), best.key)
         }
@@ -288,7 +289,7 @@ object SuuntoImport {
 
         val entries = byNight.values.map { list ->
             val rec = list.sortedWith(
-                compareByDescending<SleepSessionRecord> { isWatch(it.metadata.dataOrigin.packageName) }
+                compareByDescending<SleepSessionRecord> { de.endurofit.data.Watches.isSelected(it.metadata.dataOrigin.packageName) }.thenByDescending { isWatch(it.metadata.dataOrigin.packageName) }
                     .thenByDescending { it.endTime.toEpochMilli() - it.startTime.toEpochMilli() }
             ).first()
             var deep = 0L; var light = 0L; var rem = 0L; var awake = 0L
@@ -402,7 +403,7 @@ object SuuntoImport {
             val candidates = bySource.entries
                 .map { it.key to it.value.filter { s -> s.t in day until next } }
                 .filter { it.second.isNotEmpty() }
-                .sortedWith(compareByDescending<Pair<String, List<HrSample>>> { isWatch(it.first) }.thenByDescending { it.second.size })
+                .sortedWith(compareByDescending<Pair<String, List<HrSample>>> { de.endurofit.data.Watches.isSelected(it.first) }.thenByDescending { isWatch(it.first) }.thenByDescending { it.second.size })
             val built = candidates.firstNotNullOfOrNull { (pkg, list) ->
                 DayHrBuilder.build(day, list, resting[day], true, pkg)
             } ?: continue
@@ -433,6 +434,7 @@ object SuuntoImport {
         isPolar(pkg) -> "Polar"
         isGarmin(pkg) -> "Garmin"
         pkg == "com.sec.android.app.shealth" -> "Samsung Health"
+        de.endurofit.data.Watches.labelFor(pkg) != null -> de.endurofit.data.Watches.labelFor(pkg)!!
         pkg == "com.google.android.apps.fitness" -> "Google Fit"
         pkg.startsWith("com.google.android.apps.healthdata") || pkg == "android" -> "Handy (Android)"
         else -> try {

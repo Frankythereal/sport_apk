@@ -75,6 +75,14 @@ fun AppRoot() {
         if (openFood) { tab = 2; Nav.openFood.value = false }
     }
 
+    // Einrichtung beim ersten Start (oder aus dem Profil neu gestartet)
+    val again by Nav.onboarding.collectAsState()
+    var firstRun by remember { mutableStateOf(!Repo.onboarded) }
+    if (firstRun || again) {
+        Onboarding(onDone = { firstRun = false; Nav.onboarding.value = false; tab = 0 })
+        return
+    }
+
     val tabs = listOf("🏠" to "Heute", "❤️" to "Training", "🍽️" to "Essen", "📊" to "Analyse", "👤" to "Profil")
 
     Scaffold(

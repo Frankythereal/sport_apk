@@ -331,6 +331,18 @@ object Repo {
         _supps.value.firstOrNull { it.id == i.suppId }?.let { saveSupp(it.copy(stock = it.stock + i.units)) }
     }
 
+    /** Ausgewählte Uhr (Watches.id), null = noch nicht gewählt */
+    var watchBrand: String?
+        get() = prefs.getString("watch_brand", null)
+        set(v) { prefs.edit().putString("watch_brand", v).apply(); watchFlow.value = v }
+    /** Zum Beobachten in der Oberfläche */
+    val watchFlow = MutableStateFlow<String?>(null)
+
+    /** Einrichtung beim ersten Start abgeschlossen */
+    var onboarded: Boolean
+        get() = prefs.getBoolean("onboarded", false)
+        set(v) = prefs.edit().putBoolean("onboarded", v).apply()
+
     /** Reihenfolge / ausgeblendete Kacheln auf „Heute“ */
     var dashOrder: String
         get() = prefs.getString("dash_order", "") ?: ""
@@ -433,6 +445,10 @@ object Repo {
         prefs = ctx.applicationContext.getSharedPreferences("endurofit", Context.MODE_PRIVATE)
         load()
         loadExtras()
+        // Wer die App schon benutzt, braucht keine Einrichtung mehr
+        if (!onboarded && (_sessions.value.isNotEmpty() || _food.value.isNotEmpty() || polarToken.isNotBlank())) onboarded = true
+        if (watchBrand == null && polarToken.isNotBlank()) watchBrand = "polar"
+        watchFlow.value = watchBrand
     }
 
     private fun load() {

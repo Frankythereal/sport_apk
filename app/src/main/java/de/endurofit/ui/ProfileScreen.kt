@@ -95,13 +95,15 @@ fun ProfileScreen(onOpenSession: (String) -> Unit = {}) {
                 )
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    StatusPill("Polar", polarOn)
+                    StatusPill(de.endurofit.data.Watches.selected()?.name ?: "Uhr", if (Repo.watchBrand == "polar") polarOn else Repo.watchBrand != null)
                     StatusPill("Sensor", Repo.lastDeviceAddress != null)
                     StatusPill("Waage", Repo.scaleAddress != null)
                     StatusPill("Foto-KI", Repo.claudeKey.isNotBlank())
                 }
             }
         }
+
+        WatchSection()
 
         WeightCard()
 
@@ -152,7 +154,8 @@ fun ProfileScreen(onOpenSession: (String) -> Unit = {}) {
 
         GoalsEditor()
 
-        PolarSettings()
+        val watchSel by Repo.watchFlow.collectAsState()
+        if (watchSel == "polar" || polarOn) PolarSettings()
         WatchBodyCard()
 
         SectionCard("📂 Trainings als FIT-Datei", collapsible = true, startOpen = false, subtitle = "Import aus Suunto & Co.") {
@@ -184,6 +187,7 @@ fun ProfileScreen(onOpenSession: (String) -> Unit = {}) {
             Text("• Das Handy muss beim Fahren dabei sein (Rucksack oder Jacke), damit es den Puls empfängt.")
             Text("• Reißt die Verbindung ab, verbindet sich die App automatisch neu.")
         }
+        OutlinedButton(onClick = { Nav.onboarding.value = true }, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) { Text("🧭 Einrichtung erneut starten") }
         Hint("EnduroFit · alle Daten bleiben auf deinem Handy", Modifier.padding(bottom = 24.dp))
     }
 }
@@ -228,7 +232,7 @@ fun SuuntoImportSection(compact: Boolean) {
         )
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Trainings nur von der Uhr (Polar, Suunto, Garmin)", Modifier.weight(1f))
+            Text("Trainings nur von der Uhr (nicht vom Handy)", Modifier.weight(1f))
             Switch(checked = onlySuunto, onCheckedChange = { onlySuunto = it; Repo.onlySuunto = it })
         }
     }
