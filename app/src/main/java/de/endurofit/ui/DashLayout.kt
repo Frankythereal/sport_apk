@@ -23,6 +23,7 @@ object DashLayout {
         "sleepwater" to "😴 Schlaf & 💧 Trinken",
         "kcal" to "🔥 Kalorien & Vitalwerte",
         "pills" to "💊 Tabletten",
+        "caffeine" to "☕ Kaffee & Energy",
         "weight" to "⚖️ Gewicht",
         "exercise" to "🧘 Bewegungspause",
         "training" to "🏍️ Training & Woche",

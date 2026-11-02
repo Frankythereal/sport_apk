@@ -136,21 +136,18 @@ fun DayTimeline(
                     val ry = y(r.toFloat())
                     drawLine(HrColor.copy(alpha = 0.5f), Offset(0f, ry), Offset(w, ry), strokeWidth = 1.5f)
                 }
-                val path = Path()
-                var first = true
-                var lastX = -100f
+                // Linie, abschnittsweise in der Farbe der Pulszone – Lücken (Uhr abgelegt) bleiben offen
+                var prev: Offset? = null
+                var prevT = 0L
                 for (p in pts) {
                     val px = x(p.t)
                     if (px > limit) break
-                    val py = y(p.bpm.toFloat())
-                    if (first || px - lastX > w / 48f) { path.moveTo(px, py); first = false } else path.lineTo(px, py)
-                    lastX = px
-                }
-                drawPath(path, HrColor.copy(alpha = 0.45f), style = Stroke(1.2.dp.toPx()))
-                for (p in pts) {
-                    val px = x(p.t)
-                    if (px > limit) break
-                    drawCircle(zoneColor(Calc.zoneOf(p.bpm, maxHr)), 2.dp.toPx(), Offset(px, y(p.bpm.toFloat())))
+                    val o = Offset(px, y(p.bpm.toFloat()))
+                    val pr = prev
+                    if (pr != null && p.t - prevT < 30 * 60_000L) {
+                        drawLine(zoneColor(Calc.zoneOf(p.bpm, maxHr)), pr, o, strokeWidth = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                    }
+                    prev = o; prevT = p.t
                 }
                 // Höchster Wert markieren
                 pts.maxByOrNull { it.bpm }?.let { m ->
@@ -190,7 +187,7 @@ fun DayTimeline(
             }
         }
         Spacer(Modifier.height(4.dp))
-        Hint(info ?: if (hr != null && hr.points.size > 1) "Puls: Skala rechts in bpm · orange Linie = Ruhepuls · Punktfarbe = Pulszone. Antippen zeigt die Uhrzeit." else "Tippe auf die Zeitleiste, um zu sehen, was um diese Uhrzeit war.")
+        Hint(info ?: if (hr != null && hr.points.size > 1) "Puls: Skala rechts in bpm · dünne Linie = Ruhepuls · Farbe = Pulszone. Antippen zeigt die Uhrzeit." else "Tippe auf die Zeitleiste, um zu sehen, was um diese Uhrzeit war.")
         Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             listOf(SleepColor to "Schlaf", Color(0xFFFF6D00) to "Training", FoodColor to "Essen", WaterColor to "Trinken", HrColor to "Puls").forEach { (c, l) ->
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {

@@ -195,6 +195,9 @@ fun FoodScreen() {
             }
         }
 
+        // ---------- Koffein ----------
+        if (day == today) Appear(i++) { CaffeineCard(collapsed = true) }
+
         // ---------- Tabletten ----------
         if (day == today) Appear(i++) { SuppCard(collapsed = true) }
 

@@ -57,6 +57,7 @@ fun AppRoot() {
         when {
             w == "today" -> tab = 0
             w == "food" || w == "supps" -> tab = 2
+            w == "caffeine" -> { CaffeineNav.pick.value = true; tab = 2 }
             w == "supp_add" -> { Nav.suppAdd.value = true; tab = 2 }
             w == "exercise_next" -> ExerciseNav.open.value = de.endurofit.work.BreakMode.nextExercise(ctx).id
             w.startsWith("exercise_") -> ExerciseNav.open.value = w.removePrefix("exercise_")

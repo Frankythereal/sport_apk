@@ -64,6 +64,10 @@ object Repo {
     /** Wiegungen, neueste zuerst */
     val weights: StateFlow<List<WeightEntry>> = _weights
 
+    private val _caffeine = MutableStateFlow<List<CaffeineEntry>>(emptyList())
+    /** Kaffee, Energy-Drinks & Co., neueste zuerst */
+    val caffeine: StateFlow<List<CaffeineEntry>> = _caffeine
+
     private val _supps = MutableStateFlow<List<Supplement>>(emptyList())
     val supps: StateFlow<List<Supplement>> = _supps
     private val _suppIntakes = MutableStateFlow<List<SuppIntake>>(emptyList())
@@ -104,6 +108,7 @@ object Repo {
         _weights.value = loadList("weights.json") { WeightEntry.fromJson(it) }.sortedByDescending { it.t }
         // Beim ersten Start deine Präparate vom Foto anlegen
         _supps.value = if (File(baseDir, "supps.json").exists()) loadList("supps.json") { Supplement.fromJson(it) } else SuppPresets.all
+        _caffeine.value = loadList("caffeine.json") { CaffeineEntry.fromJson(it) }.sortedByDescending { it.t }
         _suppIntakes.value = loadList("supp_intakes.json") { SuppIntake.fromJson(it) }.sortedByDescending { it.t }
         File(baseDir, "watchbody.json").takeIf { it.exists() }?.let {
             try { _watchBody.value = WatchBody.fromJson(JSONObject(it.readText())) } catch (_: Exception) {}
@@ -261,6 +266,38 @@ object Repo {
     }
 
     // ---------- Blutsauerstoff ----------
+
+    // ---------- Koffein ----------
+
+    /** Getränk eintragen: zählt als Trinken (außer z. B. Pre-Workout) und Zucker-kcal als Essen. */
+    @Synchronized
+    fun addCaffeine(d: CaffeineDrink, t: Long = System.currentTimeMillis(), mg: Double = d.mg, ml: Int = d.ml): CaffeineEntry {
+        val n = System.nanoTime()
+        var waterId: String? = null
+        if (d.countsAsWater && ml > 0) {
+            waterId = "w_cf_$n"
+            _water.value = (_water.value + WaterEntry(waterId, t, ml)).sortedByDescending { it.t }
+            saveList("water.json", _water.value) { it.toJson() }
+        }
+        var foodId: String? = null
+        if (d.kcal > 0) {
+            foodId = "f_cf_$n"
+            addFood(FoodEntry(foodId, t, d.emoji + " " + d.name, d.kcal, carbs = d.carbs))
+        }
+        val e = CaffeineEntry("cf_$n", t, d.name, d.emoji, mg, ml, d.kcal, waterId, foodId)
+        _caffeine.value = (_caffeine.value + e).sortedByDescending { it.t }
+        saveList("caffeine.json", _caffeine.value) { it.toJson() }
+        return e
+    }
+
+    @Synchronized
+    fun deleteCaffeine(id: String) {
+        val e = _caffeine.value.firstOrNull { it.id == id } ?: return
+        e.waterId?.let { deleteWater(it) }
+        e.foodId?.let { deleteFood(it) }
+        _caffeine.value = _caffeine.value.filter { it.id != id }
+        saveList("caffeine.json", _caffeine.value) { it.toJson() }
+    }
 
     // ---------- Nahrungsergänzung ----------
 

@@ -10,6 +10,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalSize
 import androidx.glance.action.Action
@@ -77,6 +79,27 @@ private data class WidgetData(
     val liveStart: Long?,
     val pillsDue: Int,
 )
+
+/**
+ * Glance hält ein Widget eine Weile „am Leben“ und zeichnet bei updateAll nur neu –
+ * deshalb die Daten innerhalb der Oberfläche lesen und auf Änderungen hören.
+ */
+@Composable
+private fun liveData(ctx: Context): WidgetData {
+    Repo.init(ctx)
+    val w by Repo.water.collectAsState()
+    val f by Repo.food.collectAsState()
+    val st by Repo.steps.collectAsState()
+    val se by Repo.sessions.collectAsState()
+    val sl by Repo.sleep.collectAsState()
+    val r by Repo.recovery.collectAsState()
+    val h by Repo.dayHr.collectAsState()
+    val su by Repo.supps.collectAsState()
+    val si by Repo.suppIntakes.collectAsState()
+    val ca by Repo.caffeine.collectAsState()
+    val live by Recorder.live.collectAsState()
+    return androidx.compose.runtime.remember(w, f, st, se, sl, r, h, su, si, ca, live) { load(ctx) }
+}
 
 private fun load(ctx: Context): WidgetData {
     Repo.init(ctx)
@@ -216,8 +239,7 @@ private val SIZES = SizeMode.Exact
 class TodayWidget : GlanceAppWidget() {
     override val sizeMode = SIZES
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val d = load(context)
-        provideContent { OverviewContent(context, d) }
+        provideContent { OverviewContent(context, liveData(context)) }
     }
 }
 
@@ -271,8 +293,7 @@ class TodayWidgetReceiver : GlanceAppWidgetReceiver() {
 class WaterWidget : GlanceAppWidget() {
     override val sizeMode = SIZES
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val d = load(context)
-        provideContent { FoodWaterContent(context, d) }
+        provideContent { FoodWaterContent(context, liveData(context)) }
     }
 }
 
@@ -303,6 +324,7 @@ private fun FoodWaterContent(ctx: Context, d: WidgetData) {
             val water = @Composable { m: GlanceModifier ->
                 Key("+250", "💧 ml", Blue, actionRunCallback<AddWaterAction>(actionParametersOf(ML to 250)), m, size = ks)
                 Key("+500", "💧 ml", Blue, actionRunCallback<AddWaterAction>(actionParametersOf(ML to 500)), m, size = ks)
+                Key("☕", "Kaffee", cp(0xFFA1887F), open(ctx, "caffeine"), m, size = ks)
             }
             val food = @Composable { m: GlanceModifier ->
                 Key("📷", "Foto", Orange, open(ctx, "food_photo"), m, size = ks)
@@ -332,8 +354,7 @@ class WaterWidgetReceiver : GlanceAppWidgetReceiver() {
 class TrainingWidget : GlanceAppWidget() {
     override val sizeMode = SIZES
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val d = load(context)
-        provideContent { TrainingContent(context, d) }
+        provideContent { TrainingContent(context, liveData(context)) }
     }
 }
 
@@ -375,14 +396,15 @@ class TrainingWidgetReceiver : GlanceAppWidgetReceiver() {
 class PillWidget : GlanceAppWidget() {
     override val sizeMode = SIZES
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        Repo.init(context)
-        val today = Calc.dayStart(System.currentTimeMillis())
-        val trained = Calc.sessionsOfDay(Repo.sessions.value, today).isNotEmpty()
-        val sick = de.endurofit.data.Sick.isSickDay(Repo.sick.value, today)
-        val due = de.endurofit.data.Supps.dueToday(Repo.supps.value, Repo.suppIntakes.value, trained, sick).filter { it.priority > 0 }
-        val taken = Repo.suppIntakes.value.filter { it.t >= today }
-            .mapNotNull { i -> Repo.supps.value.firstOrNull { it.id == i.suppId } }.distinctBy { it.id }
-        provideContent { PillContent(context, due.map { it.supp }, taken) }
+        provideContent {
+            val d = liveData(context)
+            val today = Calc.dayStart(System.currentTimeMillis())
+            val trained = Calc.sessionsOfDay(Repo.sessions.value, today).isNotEmpty()
+            val due = de.endurofit.data.Supps.dueToday(Repo.supps.value, Repo.suppIntakes.value, trained, d.sick).filter { it.priority > 0 }
+            val taken = Repo.suppIntakes.value.filter { it.t >= today }
+                .mapNotNull { i -> Repo.supps.value.firstOrNull { it.id == i.suppId } }.distinctBy { it.id }
+            PillContent(context, due.map { it.supp }, taken)
+        }
     }
 }
 
