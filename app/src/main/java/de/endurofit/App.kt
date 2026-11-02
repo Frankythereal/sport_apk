@@ -34,8 +34,12 @@ class App : Application() {
         // Widgets aktualisieren, sobald sich etwas ändert (Trinken, Essen, Schritte, Erholung …)
         appScope.launch {
             kotlinx.coroutines.flow.merge(
-                Repo.water, Repo.food, Repo.steps, Repo.recovery, Repo.dayHr, Repo.goals, Repo.sessions, Repo.sick, de.endurofit.hr.Recorder.live, Repo.suppIntakes,
+                Repo.water, Repo.food, Repo.steps, Repo.recovery, Repo.dayHr, Repo.goals, Repo.sessions, Repo.sick, de.endurofit.hr.Recorder.live, Repo.suppIntakes, Repo.supps,
             ).drop(1).debounce(1500).collect { de.endurofit.widget.Widgets.updateAll(this@App) }
+        }
+        // Erinnerungen neu planen, wenn sich Präparate oder Uhrzeiten ändern
+        appScope.launch {
+            Repo.supps.drop(1).debounce(1000).collect { de.endurofit.supp.SuppReminders.schedule(this@App) }
         }
         // Kartendienst (OpenStreetMap) braucht eine Kennung und einen Zwischenspeicher
         org.osmdroid.config.Configuration.getInstance().apply {

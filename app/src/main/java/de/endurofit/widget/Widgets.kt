@@ -75,6 +75,7 @@ private data class WidgetData(
     val sick: Boolean,
     val liveType: SessionType?,
     val liveStart: Long?,
+    val pillsDue: Int,
 )
 
 private fun load(ctx: Context): WidgetData {
@@ -106,6 +107,9 @@ private fun load(ctx: Context): WidgetData {
         sick = d.sick,
         liveType = live?.type,
         liveStart = live?.start,
+        pillsDue = de.endurofit.data.Supps.dueToday(
+            Repo.supps.value, Repo.suppIntakes.value, d.sessions.isNotEmpty(), d.sick,
+        ).count { it.priority > 0 },
     )
 }
 
@@ -158,10 +162,12 @@ private data class Sz(val value: Float, val label: Float, val bar: Float)
 @Composable
 private fun sizing(cols: Int, rows: Int): Sz {
     val s = LocalSize.current
-    val byHeight = ((s.height.value - 16) / rows) / 3.2f
-    val byWidth = ((s.width.value - 16) / cols) / 4.6f
-    val v = minOf(byHeight, byWidth).coerceIn(13f, 30f)
-    return Sz(v, (v * 0.62f).coerceIn(10f, 17f), (v / 3.2f).coerceIn(4f, 9f))
+    // Höhe je Zeile ≈ Wert + Beschriftung + Balken + Abstand ≈ 2,6 × Schriftgröße
+    val byHeight = ((s.height.value - 20) / rows) / 2.6f
+    // Breite je Spalte ≈ 6 Zeichen (Emoji + Zahl) ≈ 4,2 × Schriftgröße
+    val byWidth = ((s.width.value - 22) / cols) / 4.2f
+    val v = minOf(byHeight, byWidth).coerceIn(13f, 40f)
+    return Sz(v, (v * 0.6f).coerceIn(10f, 20f), (v / 3.5f).coerceIn(4f, 10f))
 }
 
 /** Eine Kennzahl: Emoji + Wert, darunter kurze Beschriftung und Balken. */
@@ -215,56 +221,41 @@ class TodayWidget : GlanceAppWidget() {
     }
 }
 
+private data class M(val emoji: String, val value: String, val label: String, val frac: Float?, val color: ColorProvider)
+
 @Composable
 private fun OverviewContent(ctx: Context, d: WidgetData) {
-    val tall = LocalSize.current.height >= 110.dp
-    val sz = sizing(4, if (tall) 2 else 1)
+    val bal = d.balance
+    val all = listOf(
+        M("⚖️", if (bal == null) "–" else (if (bal < 0) "−" else "+") + Calc.fmtNum(abs(bal)), "kcal Bilanz", null,
+            if (bal == null) White else if (bal <= 0) Green else Orange),
+        M("👣", k(d.steps), if (d.sick) "krank – Pause" else "von ${k(d.stepGoal)}",
+            d.steps.toFloat() / d.stepGoal.coerceAtLeast(1), if (d.steps >= d.stepGoal) Green else Orange),
+        M("💧", liters(d.waterMl), "von ${liters(d.waterGoal)} l",
+            d.waterMl.toFloat() / d.waterGoal.coerceAtLeast(1), if (d.waterMl >= d.waterGoal) Green else Blue),
+        M("🥩", "${d.protein.roundToInt()}g", "von ${d.proteinGoal.roundToInt()} g",
+            (d.protein / d.proteinGoal.coerceAtLeast(1.0)).toFloat(), if (d.protein >= d.proteinGoal) Green else Yellow),
+        M("😴", d.sleepMs?.let { hm(it) } ?: "–", "Schlaf",
+            d.sleepMs?.let { it.toFloat() / d.sleepGoalMs.coerceAtLeast(1) }, if ((d.sleepMs ?: 0) >= d.sleepGoalMs) Green else Purple),
+        M("❤️", d.resting?.toString() ?: "–", d.recovery?.let { "Erholung " + de.endurofit.ui.rechargeText(it) } ?: "Ruhepuls", null,
+            when (d.recovery) { null -> White; 1, 2 -> Red; 3 -> Orange; else -> Green }),
+        M("💊", if (d.pillsDue == 0) "✓" else "${d.pillsDue}", if (d.pillsDue == 0) "Tabletten" else "Tabl. offen", null,
+            if (d.pillsDue == 0) Green else Purple),
+        if (d.liveType != null) M("⏺", "läuft", d.liveType.label, null, Red)
+        else M("🏍️", "${d.trainingMin}′", if (d.trainingMin > 0) "${Calc.fmtNum(d.trainingKcal)} kcal" else "Training", null, White),
+    )
+    val size = LocalSize.current
+    val tall = size.height >= 110.dp
+    val items = if (tall) all else all.take(4)
+    // Aufteilung wählen, bei der die Schrift am größten wird (4 nebeneinander oder 2 nebeneinander)
+    val options = listOf(4, 2).map { cols -> cols to sizing(cols, (items.size + cols - 1) / cols) }
+    val (cols, sz) = options.maxBy { it.second.value }
     Frame {
         Column(GlanceModifier.fillMaxSize().clickable(open(ctx, "today")), verticalAlignment = Alignment.CenterVertically) {
-            Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                val bal = d.balance
-                Metric(
-                    "⚖️", if (bal == null) "–" else (if (bal < 0) "−" else "+") + Calc.fmtNum(abs(bal)),
-                    if (bal == null) "kcal Bilanz" else "Bilanz",
-                    null, if (bal == null) White else if (bal <= 0) Green else Orange,
-                    GlanceModifier.defaultWeight(), sz,
-                )
-                Metric(
-                    "👣", k(d.steps), if (d.sick) "krank – Pause" else "von ${k(d.stepGoal)}",
-                    d.steps.toFloat() / d.stepGoal.coerceAtLeast(1),
-                    if (d.steps >= d.stepGoal) Green else Orange, GlanceModifier.defaultWeight(), sz,
-                )
-                Metric(
-                    "💧", liters(d.waterMl), "von ${liters(d.waterGoal)} l",
-                    d.waterMl.toFloat() / d.waterGoal.coerceAtLeast(1),
-                    if (d.waterMl >= d.waterGoal) Green else Blue, GlanceModifier.defaultWeight(), sz,
-                )
-                Metric(
-                    "🥩", "${d.protein.roundToInt()}g", "von ${d.proteinGoal.roundToInt()} g",
-                    (d.protein / d.proteinGoal.coerceAtLeast(1.0)).toFloat(),
-                    if (d.protein >= d.proteinGoal) Green else Yellow, GlanceModifier.defaultWeight(), sz,
-                )
-            }
-            if (tall) {
-                Spacer(GlanceModifier.height((sz.value * 0.9f).dp))
+            items.chunked(cols).forEachIndexed { r, row ->
+                if (r > 0) Spacer(GlanceModifier.defaultWeight())
                 Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Metric(
-                        "😴", d.sleepMs?.let { hm(it) } ?: "–", "Schlaf",
-                        d.sleepMs?.let { it.toFloat() / d.sleepGoalMs.coerceAtLeast(1) },
-                        if ((d.sleepMs ?: 0) >= d.sleepGoalMs) Green else Purple, GlanceModifier.defaultWeight(), sz,
-                    )
-                    Metric(
-                        "🔋", de.endurofit.ui.rechargeText(d.recovery), "Erholung", null,
-                        when (d.recovery) { null -> White; 1, 2 -> Red; 3 -> Orange; else -> Green },
-                        GlanceModifier.defaultWeight(), sz,
-                    )
-                    Metric("❤️", d.resting?.toString() ?: "–", "Ruhepuls", null, White, GlanceModifier.defaultWeight(), sz)
-                    Metric(
-                        if (d.liveType != null) "⏺" else "🏍️",
-                        if (d.liveType != null) "läuft" else "${d.trainingMin}′",
-                        if (d.liveType != null) d.liveType.label else if (d.trainingMin > 0) "${Calc.fmtNum(d.trainingKcal)} kcal" else "Training",
-                        null, if (d.liveType != null) Red else White, GlanceModifier.defaultWeight(), sz,
-                    )
+                    row.forEach { m -> Metric(m.emoji, m.value, m.label, m.frac, m.color, GlanceModifier.defaultWeight(), sz) }
                 }
             }
         }
@@ -378,6 +369,91 @@ class TrainingWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = TrainingWidget()
 }
 
+// ------------------------------------------------------------------ 4) Tabletten
+
+class PillWidget : GlanceAppWidget() {
+    override val sizeMode = SIZES
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        Repo.init(context)
+        val today = Calc.dayStart(System.currentTimeMillis())
+        val trained = Calc.sessionsOfDay(Repo.sessions.value, today).isNotEmpty()
+        val sick = de.endurofit.data.Sick.isSickDay(Repo.sick.value, today)
+        val due = de.endurofit.data.Supps.dueToday(Repo.supps.value, Repo.suppIntakes.value, trained, sick).filter { it.priority > 0 }
+        val taken = Repo.suppIntakes.value.filter { it.t >= today }
+            .mapNotNull { i -> Repo.supps.value.firstOrNull { it.id == i.suppId } }.distinctBy { it.id }
+        provideContent { PillContent(context, due.map { it.supp }, taken) }
+    }
+}
+
+private val SUPP = ActionParameters.Key<String>("supp")
+
+@Composable
+private fun PillContent(ctx: Context, due: List<de.endurofit.data.Supplement>, taken: List<de.endurofit.data.Supplement>) {
+    val size = LocalSize.current
+    val now = java.util.Calendar.getInstance().let { it.get(java.util.Calendar.HOUR_OF_DAY) * 60 + it.get(java.util.Calendar.MINUTE) }
+    // Zeilenhöhe ~ 2,4 × Schrift; so viele Zeilen wie passen
+    val fs = (size.height.value / 4.2f).coerceIn(13f, 22f)
+    val rowsFit = (((size.height.value - 16) / (fs * 2.3f)).toInt()).coerceAtLeast(1)
+    Frame {
+        Column(GlanceModifier.fillMaxSize()) {
+            Row(GlanceModifier.fillMaxWidth().clickable(open(ctx, "supps")), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (due.isEmpty()) "💊 Alles genommen ✓" else "💊 ${due.size} offen",
+                    style = TextStyle(color = if (due.isEmpty()) Green else White, fontWeight = FontWeight.Bold, fontSize = fs.sp),
+                    modifier = GlanceModifier.defaultWeight(), maxLines = 1,
+                )
+                Box(GlanceModifier.cornerRadius(10.dp).background(Cell).padding(horizontal = 10.dp, vertical = 2.dp).clickable(open(ctx, "supp_add"))) {
+                    Text("＋", style = TextStyle(color = Purple, fontWeight = FontWeight.Bold, fontSize = fs.sp))
+                }
+            }
+            if (due.isEmpty()) {
+                if (rowsFit > 1 && taken.isNotEmpty()) Text(
+                    "Heute: " + taken.joinToString("  ") { it.emoji + " " + it.name.substringBefore(' ') },
+                    style = TextStyle(color = Grey, fontSize = (fs * 0.75f).sp), maxLines = 2,
+                )
+            } else {
+                due.take((rowsFit - 1).coerceAtLeast(1)).forEach { s ->
+                    Spacer(GlanceModifier.height(4.dp))
+                    val late = s.at <= now
+                    Row(
+                        GlanceModifier.fillMaxWidth().cornerRadius(12.dp).background(Cell).padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(GlanceModifier.defaultWeight().clickable(open(ctx, "supps"))) {
+                            Text("${s.emoji} ${s.name}", style = TextStyle(color = White, fontWeight = FontWeight.Bold, fontSize = (fs * 0.85f).sp), maxLines = 1)
+                            Text(
+                                "⏰ ${s.atText}" + if (late) " · jetzt fällig" else "",
+                                style = TextStyle(color = if (late) Orange else Grey, fontSize = (fs * 0.65f).sp), maxLines = 1,
+                            )
+                        }
+                        Box(
+                            GlanceModifier.cornerRadius(10.dp).background(Purple).padding(horizontal = 12.dp, vertical = 4.dp)
+                                .clickable(actionRunCallback<TakeSuppAction>(actionParametersOf(SUPP to s.id))),
+                        ) {
+                            Text("✓", style = TextStyle(color = ColorProvider(Color.White), fontWeight = FontWeight.Bold, fontSize = fs.sp))
+                        }
+                    }
+                }
+                if (due.size > rowsFit - 1 && rowsFit > 1) {
+                    Text("+ ${due.size - (rowsFit - 1)} weitere", style = TextStyle(color = Grey, fontSize = (fs * 0.65f).sp))
+                }
+            }
+        }
+    }
+}
+
+class PillWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = PillWidget()
+}
+
+class TakeSuppAction : ActionCallback {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        val id = parameters[SUPP] ?: return
+        de.endurofit.supp.SuppActions.take(context, listOf(id))
+        Widgets.refresh(context)
+    }
+}
+
 // ------------------------------------------------------------------ Aktionen & Aktualisierung
 
 class AddWaterAction : ActionCallback {
@@ -405,6 +481,7 @@ object Widgets {
             TodayWidget().updateAll(ctx)
             WaterWidget().updateAll(ctx)
             TrainingWidget().updateAll(ctx)
+            PillWidget().updateAll(ctx)
         } catch (_: Exception) {
         }
     }

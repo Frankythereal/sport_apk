@@ -43,6 +43,8 @@ enum class SuppSlot(val label: String, val emoji: String, val hour: Int, val min
 
     companion object {
         fun of(n: String?) = entries.firstOrNull { it.name == n } ?: MORNING
+        /** Zeitfenster zu einer Uhrzeit (Minuten nach Mitternacht) */
+        fun forMinute(m: Int) = when { m < 11 * 60 -> MORNING; m < 17 * 60 -> MIDDAY; else -> EVENING }
     }
 }
 
@@ -69,7 +71,13 @@ data class Supplement(
     /** Nur nach ärztlichem Rat (z. B. Eisen bei Männern) – sonst schlägt die App es nicht vor */
     val onlyIfAdvised: Boolean = false,
     val advised: Boolean = false,
+    /** Eigene Erinnerungszeit in Minuten nach Mitternacht, -1 = Standard des Zeitfensters */
+    val remindAt: Int = -1,
 ) {
+    /** Uhrzeit der Erinnerung (Minuten nach Mitternacht) */
+    val at: Int get() = if (remindAt >= 0) remindAt else slot.hour * 60 + slot.minute
+    val atText: String get() = String.format("%d:%02d", at / 60, at % 60)
+
     val everyDays: Int get() = if (perDay > 0 && perDay < 1) Math.round(1 / perDay).toInt() else 1
     val unitsPerDose: Int get() = if (perDay >= 1) perDay.toInt() else 1
     /** Vorrat reicht noch … Tage */
@@ -83,7 +91,7 @@ data class Supplement(
         put("per", JSONObject().apply { perUnit.forEach { (k, v) -> put(k.name, v) } })
         put("perDay", perDay); put("slot", slot.name); put("kind", kind.name); put("active", active)
         put("stock", stock); put("pack", packSize); put("how", howTo); put("src", source)
-        put("onlyAdv", onlyIfAdvised); put("adv", advised)
+        put("onlyAdv", onlyIfAdvised); put("adv", advised); put("at", remindAt)
     }
 
     companion object {
@@ -95,6 +103,7 @@ data class Supplement(
                 o.optDouble("perDay", 1.0), SuppSlot.of(o.optString("slot")), SuppKind.of(o.optString("kind")),
                 o.optBoolean("active", true), o.optInt("stock", 0), o.optInt("pack", 60), o.optString("how"),
                 o.optString("src"), o.optBoolean("onlyAdv", false), o.optBoolean("adv", false),
+                o.optInt("at", -1),
             )
         }
     }
@@ -203,7 +212,7 @@ object Supps {
                 }
                 SuppKind.OTHER -> Due(s, s.howTo.ifBlank { "Laut deinem Plan heute dran." }, 1)
             }
-        }.sortedByDescending { it.priority }
+        }.sortedWith(compareBy<Due> { it.supp.at }.thenByDescending { it.priority })
     }
 
     /** Nährstoffe eines Tages aus allen Einnahmen. */

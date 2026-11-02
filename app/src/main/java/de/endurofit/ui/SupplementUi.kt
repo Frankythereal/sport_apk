@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -96,6 +97,8 @@ fun SuppCard(collapsed: Boolean = false) {
     var calendar by remember { mutableStateOf(Repo.suppCalendar && SuppCalendar.allowed(ctx)) }
     var editing by remember { mutableStateOf<Supplement?>(null) }
     var adding by remember { mutableStateOf(false) }
+    val addReq by Nav.suppAdd.collectAsState()
+    LaunchedEffect(addReq) { if (addReq) { adding = true; Nav.suppAdd.value = false } }
 
     val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val calPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -146,14 +149,14 @@ fun SuppCard(collapsed: Boolean = false) {
         Spacer(Modifier.height(12.dp))
         Text("Deine Präparate & Vorrat", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
         supps.forEach { s -> SuppRow(s) { editing = s } }
-        TextButton(onClick = { adding = true }) { Text("+ Eigenes Präparat") }
+        Button(onClick = { adding = true }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { Text("＋ Tablette / Präparat hinzufügen") }
 
         // ---------- Einstellungen ----------
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Erinnern")
-                Hint("8:00, 12:30 und 21:00 – nur wenn etwas fällig ist")
+                Hint("Zur eingestellten Uhrzeit je Präparat (⏰ antippen → Ändern) – nur wenn es fällig ist")
             }
             Switch(reminders, onCheckedChange = {
                 reminders = it
@@ -319,9 +322,9 @@ private fun BackfillDialog(day: Long, supps: List<Supplement>, onDismiss: () -> 
         confirmButton = {
             TextButton(enabled = chosen.isNotEmpty(), onClick = {
                 // Zeit: zur Uhrzeit des jeweiligen Zeitfensters
-                val bySlot = supps.filter { it.id in chosen }.groupBy { it.slot }
-                bySlot.forEach { (slot, list) ->
-                    val t = day + slot.hour * 3_600_000L + slot.minute * 60_000L
+                val byTime = supps.filter { it.id in chosen }.groupBy { it.at }
+                byTime.forEach { (at, list) ->
+                    val t = day + at * 60_000L
                     SuppActions.take(ctx, list.map { it.id }, minOf(t, System.currentTimeMillis()))
                 }
                 onDismiss()
@@ -346,7 +349,7 @@ private fun SuppRow(s: Supplement, onEdit: () -> Unit) {
                 Text(s.name, fontWeight = FontWeight.SemiBold)
                 Hint(
                     "${s.brand} · " + (if (s.everyDays > 1) "alle ${s.everyDays} Tage 1" else "${s.unitsPerDose}× täglich") +
-                        " · ${s.slot.emoji} ${s.slot.label}" + if (!s.active) " · pausiert" else ""
+                        " · ⏰ ${s.atText}" + if (!s.active) " · pausiert" else ""
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
@@ -389,7 +392,8 @@ private fun SuppEditDialog(orig: Supplement?, onDismiss: () -> Unit) {
     var pack by remember { mutableStateOf((orig?.packSize ?: 60).toString()) }
     var every by remember { mutableIntStateOf(orig?.everyDays ?: 1) }
     var perDose by remember { mutableIntStateOf(orig?.unitsPerDose ?: 1) }
-    var slot by remember { mutableStateOf(orig?.slot ?: SuppSlot.MORNING) }
+    var at by remember { mutableIntStateOf(orig?.at ?: (8 * 60)) }
+    val slot = SuppSlot.forMinute(at)
     val editable = listOf(Nutrient.VIT_C, Nutrient.VIT_D, Nutrient.VIT_E, Nutrient.IRON, Nutrient.MAGNESIUM, Nutrient.ZINC, Nutrient.B12)
     val values = remember { mutableStateMapOf<Nutrient, String>().apply { orig?.perUnit?.forEach { (k, v) -> put(k, Calc.fmtNum(v, if (v < 10) 1 else 0)) } } }
 
@@ -412,8 +416,19 @@ private fun SuppEditDialog(orig: Supplement?, onDismiss: () -> Unit) {
                     Segmented(listOf(1 to "1 Stück", 2 to "2 Stück"), perDose, { perDose = it })
                 }
                 Spacer(Modifier.height(6.dp))
-                Text("Wann", style = MaterialTheme.typography.labelMedium)
-                Segmented(SuppSlot.entries.map { it to it.emoji + " " + it.label }, slot, { slot = it })
+                Text("Erinnern um", style = MaterialTheme.typography.labelMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = {
+                        android.app.TimePickerDialog(ctx, { _, h, m -> at = h * 60 + m }, at / 60, at % 60, true).show()
+                    }) { Text("⏰ " + String.format("%d:%02d", at / 60, at % 60), fontSize = 18.sp) }
+                    Spacer(Modifier.width(8.dp))
+                    Hint("${slot.emoji} ${slot.label}")
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp).horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
+                    listOf(7 * 60, 8 * 60, 10 * 60, 12 * 60 + 30, 18 * 60, 21 * 60).forEach { q ->
+                        AssistChip(onClick = { at = q }, label = { Text(String.format("%d:%02d", q / 60, q % 60)) })
+                    }
+                }
                 if (orig == null || orig.kind == SuppKind.OTHER) {
                     Spacer(Modifier.height(6.dp))
                     Text("Inhalt pro Stück (leer lassen = nichts)", style = MaterialTheme.typography.labelMedium)
@@ -437,7 +452,7 @@ private fun SuppEditDialog(orig: Supplement?, onDismiss: () -> Unit) {
                 )
                 Repo.saveSupp(
                     base.copy(
-                        name = name.trim(), perUnit = per, perDay = perDay, slot = slot,
+                        name = name.trim(), perUnit = per, perDay = perDay, slot = slot, remindAt = at,
                         stock = stock.toIntOrNull() ?: base.stock, packSize = pack.toIntOrNull() ?: base.packSize,
                     )
                 )

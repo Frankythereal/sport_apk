@@ -97,52 +97,68 @@ object SuppReminders {
     const val EXTRA_SLOT = "slot"
     const val EXTRA_IDS = "ids"
 
-    private fun pi(ctx: Context, slot: SuppSlot): PendingIntent =
+    const val EXTRA_MIN = "min"
+
+    private fun pi(ctx: Context, minute: Int): PendingIntent =
         PendingIntent.getBroadcast(
-            ctx, 100 + slot.ordinal,
-            Intent(ctx, SuppReminderReceiver::class.java).putExtra(EXTRA_SLOT, slot.name),
+            ctx, 1000 + minute,
+            Intent(ctx, SuppReminderReceiver::class.java).putExtra(EXTRA_MIN, minute),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
-    private fun nextTime(slot: SuppSlot): Long {
+    private fun nextTime(minute: Int): Long {
         val c = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, slot.hour); set(Calendar.MINUTE, slot.minute); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            set(Calendar.HOUR_OF_DAY, minute / 60); set(Calendar.MINUTE, minute % 60); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }
         if (c.timeInMillis <= System.currentTimeMillis() + 30_000) c.add(Calendar.DAY_OF_YEAR, 1)
         return c.timeInMillis
     }
 
-    /** Alle drei Erinnerungen (neu) planen oder abschalten. */
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences("supp_alarms", Context.MODE_PRIVATE)
+
+    /** Eine Erinnerung je Uhrzeit, die bei deinen Präparaten eingestellt ist. */
     fun schedule(ctx: Context) {
         Repo.init(ctx)
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
+        // Alte Wecker (auch die früheren festen Zeiten) löschen
+        val old = prefs(ctx).getStringSet("times", emptySet())!!.mapNotNull { it.toIntOrNull() }
+        (old + SuppSlot.entries.map { it.hour * 60 + it.minute }).toSet().forEach { am.cancel(pi(ctx, it)) }
         SuppSlot.entries.forEach { slot ->
-            val p = pi(ctx, slot)
-            am.cancel(p)
-            if (Repo.suppReminders) am.setWindow(AlarmManager.RTC_WAKEUP, nextTime(slot), 15 * 60_000L, p)
+            am.cancel(PendingIntent.getBroadcast(ctx, 100 + slot.ordinal, Intent(ctx, SuppReminderReceiver::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
         }
+        val times = if (Repo.suppReminders) Repo.supps.value.filter { Supps.relevant(it) }.map { it.at }.toSet() else emptySet()
+        times.forEach { am.setWindow(AlarmManager.RTC_WAKEUP, nextTime(it), 10 * 60_000L, pi(ctx, it)) }
+        prefs(ctx).edit().putStringSet("times", times.map { it.toString() }.toSet()).apply()
     }
 
-    fun scheduleOne(ctx: Context, slot: SuppSlot) {
+    fun scheduleOne(ctx: Context, minute: Int) {
         if (!Repo.suppReminders) return
+        if (Repo.supps.value.none { Supps.relevant(it) && it.at == minute }) return
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
-        am.setWindow(AlarmManager.RTC_WAKEUP, nextTime(slot), 15 * 60_000L, pi(ctx, slot))
+        am.setWindow(AlarmManager.RTC_WAKEUP, nextTime(minute), 10 * 60_000L, pi(ctx, minute))
+    }
+
+    /** Was bis jetzt fällig und noch nicht genommen ist */
+    fun dueNow(ctx: Context, upTo: Int): List<Supps.Due> {
+        Repo.init(ctx)
+        val today = Calc.dayStart(System.currentTimeMillis())
+        val trained = Calc.sessionsOfDay(Repo.sessions.value, today).isNotEmpty()
+        val sick = Sick.isSickDay(Repo.sick.value, today)
+        return Supps.dueToday(Repo.supps.value, Repo.suppIntakes.value, trained, sick)
+            .filter { it.priority > 0 && it.supp.at <= upTo }
     }
 
     /** Prüft, was jetzt dran ist, und zeigt ggf. eine Benachrichtigung. */
-    fun remind(ctx: Context, slot: SuppSlot) {
+    fun remind(ctx: Context, minute: Int) {
         Repo.init(ctx)
         if (!Repo.suppReminders) return
         if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
             android.os.Build.VERSION.SDK_INT >= 33
         ) return
-        val today = Calc.dayStart(System.currentTimeMillis())
-        val trained = Calc.sessionsOfDay(Repo.sessions.value, today).isNotEmpty()
-        val sick = Sick.isSickDay(Repo.sick.value, today)
-        // Dran ist alles aus diesem und früheren Zeitfenstern, das heute noch fehlt
-        val due = Supps.dueToday(Repo.supps.value, Repo.suppIntakes.value, trained, sick)
-            .filter { it.priority > 0 && it.supp.slot.ordinal <= slot.ordinal }
+        val due = dueNow(ctx, minute)
         if (due.isEmpty()) return
+        val slot = SuppSlot.forMinute(minute)
 
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
         if (nm.getNotificationChannel(CHANNEL) == null) {
@@ -163,7 +179,7 @@ object SuppReminders {
         val text = due.joinToString("\n") { "${it.supp.emoji} ${it.supp.name}: ${it.reason}" }
         val n = Notification.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_heart)
-            .setContentTitle("💊 ${slot.label}: " + due.joinToString(", ") { it.supp.name })
+            .setContentTitle("💊 ${slot.emoji} Zeit für: " + due.joinToString(", ") { it.supp.name })
             .setContentText(due.first().reason)
             .setStyle(Notification.BigTextStyle().bigText(text))
             .setContentIntent(open)
@@ -176,11 +192,13 @@ object SuppReminders {
 
 class SuppReminderReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        val slot = SuppSlot.of(intent.getStringExtra(SuppReminders.EXTRA_SLOT))
+        val minute = intent.getIntExtra(SuppReminders.EXTRA_MIN, -1)
+        if (minute < 0) { SuppReminders.schedule(ctx); return }
         try {
-            SuppReminders.remind(ctx, slot)
+            SuppReminders.remind(ctx, minute)
+            de.endurofit.widget.Widgets.updateAll(ctx)
         } finally {
-            SuppReminders.scheduleOne(ctx, slot)
+            SuppReminders.scheduleOne(ctx, minute)
         }
     }
 }

@@ -57,6 +57,7 @@ fun AppRoot() {
         when {
             w == "today" -> tab = 0
             w == "food" || w == "supps" -> tab = 2
+            w == "supp_add" -> { Nav.suppAdd.value = true; tab = 2 }
             w.startsWith("food_") -> { Nav.foodAction.value = w.removePrefix("food_"); tab = 2 }
             w == "training" -> tab = 1
             w.startsWith("start_") -> {

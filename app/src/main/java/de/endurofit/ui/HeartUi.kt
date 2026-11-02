@@ -35,6 +35,8 @@ object Nav {
     val openFood = MutableStateFlow(false)
     /** Auftrag aus dem Essen-Widget: "photo", "manual" oder "paste". */
     val foodAction = MutableStateFlow<String?>(null)
+    /** Aus dem Tabletten-Widget: Dialog „Präparat hinzufügen“ öffnen */
+    val suppAdd = MutableStateFlow(false)
 }
 
 private val RestColor = Color(0xFFFF7043)

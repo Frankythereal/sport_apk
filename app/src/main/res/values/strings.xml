@@ -7,4 +7,6 @@
     <string name="widget_water_desc">Wasser mit einem Tipp eintragen, Essen per Foto, von Hand oder als Text</string>
     <string name="widget_training_name">EnduroFit Training starten</string>
     <string name="widget_training_desc">Enduro, Gym oder Sonstiges mit einem Tipp starten – die Verity Sense verbindet sich automatisch</string>
+    <string name="widget_pills_name">EnduroFit Tabletten</string>
+    <string name="widget_pills_desc">Welche Tabletten heute noch dran sind – mit ✓ abhaken, mit ＋ neue hinzufügen</string>
 </resources>
