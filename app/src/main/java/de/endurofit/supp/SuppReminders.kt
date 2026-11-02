@@ -215,6 +215,7 @@ class SuppBootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             SuppReminders.schedule(ctx)
+            de.endurofit.work.BreakMode.restore(ctx)
         }
     }
 }

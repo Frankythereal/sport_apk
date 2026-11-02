@@ -64,6 +64,8 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit, onO
     var showFood by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
     var detail by remember { mutableStateOf<Detail?>(null) }
+    var editDash by remember { mutableStateOf(false) }
+    var dashRev by remember { mutableIntStateOf(0) }
 
     val today = Calc.dayStart(System.currentTimeMillis())
     val d = Analysis.day(today, sessions, food, water, steps, sleep, profile, goals)
@@ -115,191 +117,210 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit, onO
             }
         }
 
-        // ---------- Tagesringe ----------
-        Appear(i++) {
-            Tile(Modifier.fillMaxWidth().padding(bottom = 12.dp), title = "Dein Tag in Ringen", onClick = { detail = Detail.GOALS }) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Rings(
-                        listOf(
-                            RingData(d.steps.toFloat() / goals.steps, StepsColor),
-                            RingData(d.waterMl.toFloat() / d.waterGoal.coerceAtLeast(1), WaterBlue),
-                            RingData((d.activeMs / 60_000.0 / activeGoalMin).toFloat(), ActiveGreen),
-                            RingData(if (d.foodCount > 0) (d.eaten / kcalTarget).toFloat() else 0f, KcalYellow),
-                        ),
-                        Modifier.size(140.dp),
-                    )
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        RingLegend(StepsColor, "Schritte", "${Analysis.fmtInt(d.steps)} / ${Analysis.fmtInt(goals.steps)}")
-                        RingLegend(WaterBlue, "Trinken", "${Calc.fmtNum(d.waterMl / 1000.0, 1)} / ${Calc.fmtNum(d.waterGoal / 1000.0, 1)} l")
-                        RingLegend(ActiveGreen, "Aktiv", "${d.activeMs / 60_000} / ${activeGoalMin.roundToInt()} min")
-                        RingLegend(KcalYellow, "Gegessen", "${Calc.fmtNum(d.eaten)} / ${Calc.fmtNum(kcalTarget)}")
-                        val done = listOf(d.steps >= goals.steps, d.waterMl >= d.waterGoal, d.activeMs / 60_000 >= activeGoalMin).count { it }
-                        Hint(if (done == 3) "🎉 Alle Ringe geschlossen!" else "$done von 3 Zielen erreicht", Modifier.padding(top = 4.dp))
-                    }
-                }
-            }
-        }
-
-        // ---------- Zeitleiste ----------
-        Appear(i++) {
-            Tile(Modifier.fillMaxWidth().padding(bottom = 12.dp), title = "Dein Tag · 0–24 Uhr") {
-                DayTimeline(
-                    day = today,
-                    sleep = d.sleep,
-                    sessions = d.sessions,
-                    food = food.filter { it.t in today until Calc.addDays(today, 1) },
-                    water = water.filter { it.t in today until Calc.addDays(today, 1) },
-                    hr = hrToday,
-                )
-            }
-        }
-
-        // ---------- Erholung | Puls ----------
-        Appear(i++) {
-            TileRow {
-                Tile(Modifier.weight(1f).fillMaxHeight(), title = "🔋 Erholung", accent = rechargeColor(rec?.status), onClick = { detail = Detail.RECOVERY }) {
-                    if (rec?.status != null) {
-                        Text(rechargeText(rec.status).replaceFirstChar { it.uppercase() }, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = rechargeColor(rec.status))
-                        Spacer(Modifier.height(4.dp))
-                        rec.hrv?.let { Text("HRV ${it.roundToInt()} ms", style = MaterialTheme.typography.bodyMedium) }
-                        rec.sleepScore?.let { Hint("Schlaf-Score $it") }
-                        Spacer(Modifier.weight(1f))
-                        AnimatedBar((rec.status / 6f), rechargeColor(rec.status))
-                    } else {
-                        Hint("Kommt nach den ersten Nächten mit der Uhr.")
-                    }
-                }
-                Tile(Modifier.weight(1f).fillMaxHeight(), title = "Puls", accent = Color(0xFFFF7043), onClick = { detail = Detail.HEART }) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        BeatingHeart(hr?.resting)
-                        Spacer(Modifier.width(6.dp))
-                        if (hr?.resting != null) CountUp(hr.resting, fontSize = 24.sp) else Text("–", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Hint(if (hr?.resting != null) "Ruhepuls" else "Ruhepuls nach der ersten Nacht")
-                    Spacer(Modifier.weight(1f))
-                    hrToday?.points?.let { Sparkline(it, Modifier.fillMaxWidth().height(36.dp), start = today, end = maxOf(System.currentTimeMillis(), today + 3_600_000)) }
-                }
-            }
-        }
-
-        // ---------- Schlaf | Trinken ----------
-        Appear(i++) {
-            TileRow {
-                Tile(Modifier.weight(1f).fillMaxHeight(), title = "😴 Schlaf", accent = SleepPurple, onClick = { detail = Detail.SLEEP }) {
-                    val s = d.sleep
-                    if (s != null) {
-                        val min = (s.asleepMs / 60_000).toInt()
-                        CountUp(min, fontSize = 24.sp, format = { "${it / 60}:${(it % 60).toString().padStart(2, '0')}" }, suffix = " h")
-                        Hint("${Calc.fmtClock(s.start)}–${Calc.fmtClock(s.end)}")
-                        Spacer(Modifier.weight(1f))
-                        if (s.hasStages) SleepStageBar(s.deepMs, s.remMs, s.lightMs, s.awakeMs)
-                        else AnimatedBar(s.asleepMs / (goals.sleepHours * 3_600_000).toFloat(), SleepPurple)
-                    } else {
-                        Hint("Noch kein Schlaf für heute Nacht.")
-                        Spacer(Modifier.weight(1f))
-                        TextButton(onClick = { showSleep = true }, contentPadding = PaddingValues(0.dp)) { Text("Eintragen") }
-                    }
-                }
-                Tile(Modifier.weight(1f).fillMaxHeight(), title = "💧 Trinken", accent = WaterBlue, onClick = { detail = Detail.WATER }) {
-                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                        WaterGlass(d.waterMl.toFloat() / d.waterGoal.coerceAtLeast(1), Modifier.width(38.dp).fillMaxHeight())
-                        Spacer(Modifier.width(10.dp))
-                        Column {
-                            CountUp(d.waterMl, fontSize = 20.sp, suffix = " ml")
-                            Hint("von ${Calc.fmtNum(d.waterGoal / 1000.0, 1)} l")
+        // ---------- Kacheln in deiner Reihenfolge ----------
+        DashLayout.visible(dashRev).forEach { key ->
+            when (key) {
+                "rings" -> {
+                        // ---------- Tagesringe ----------
+                        Appear(i++) {
+                            Tile(Modifier.fillMaxWidth().padding(bottom = 12.dp), title = "Dein Tag in Ringen", onClick = { detail = Detail.GOALS }) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Rings(
+                                        listOf(
+                                            RingData(d.steps.toFloat() / goals.steps, StepsColor),
+                                            RingData(d.waterMl.toFloat() / d.waterGoal.coerceAtLeast(1), WaterBlue),
+                                            RingData((d.activeMs / 60_000.0 / activeGoalMin).toFloat(), ActiveGreen),
+                                            RingData(if (d.foodCount > 0) (d.eaten / kcalTarget).toFloat() else 0f, KcalYellow),
+                                        ),
+                                        Modifier.size(140.dp),
+                                    )
+                                    Spacer(Modifier.width(14.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        RingLegend(StepsColor, "Schritte", "${Analysis.fmtInt(d.steps)} / ${Analysis.fmtInt(goals.steps)}")
+                                        RingLegend(WaterBlue, "Trinken", "${Calc.fmtNum(d.waterMl / 1000.0, 1)} / ${Calc.fmtNum(d.waterGoal / 1000.0, 1)} l")
+                                        RingLegend(ActiveGreen, "Aktiv", "${d.activeMs / 60_000} / ${activeGoalMin.roundToInt()} min")
+                                        RingLegend(KcalYellow, "Gegessen", "${Calc.fmtNum(d.eaten)} / ${Calc.fmtNum(kcalTarget)}")
+                                        val done = listOf(d.steps >= goals.steps, d.waterMl >= d.waterGoal, d.activeMs / 60_000 >= activeGoalMin).count { it }
+                                        Hint(if (done == 3) "🎉 Alle Ringe geschlossen!" else "$done von 3 Zielen erreicht", Modifier.padding(top = 4.dp))
+                                    }
+                                }
+                            }
                         }
-                    }
-                    FilledTonalButton(
-                        onClick = { Repo.addWater(250) },
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                        modifier = Modifier.fillMaxWidth().height(32.dp).padding(top = 4.dp),
-                    ) { Text("+250 ml", fontSize = 13.sp) }
                 }
-            }
-        }
-
-        // ---------- Kalorien | Vitalwerte ----------
-        Appear(i++) {
-            TileRow {
-                Tile(Modifier.weight(1f).fillMaxHeight(), title = "🔥 Kalorien", accent = KcalYellow, onClick = { detail = Detail.KCAL }) {
-                    val inRange = d.balance >= goals.mode.lo && d.balance <= goals.mode.hi
-                    CountUp(
-                        abs(d.balance).roundToInt(), fontSize = 22.sp,
-                        prefix = if (d.balance < 0) "−" else "+", suffix = " kcal",
-                        color = if (d.foodCount == 0) Color.Unspecified else if (inRange) Good else Accent,
-                    )
-                    Hint(if (d.foodCount == 0) "noch nichts gegessen" else "Bilanz")
-                    Spacer(Modifier.weight(1f))
-                    val maxV = maxOf(d.eaten, d.burned).coerceAtLeast(1.0)
-                    Hint("Gegessen ${Calc.fmtNum(d.eaten)}")
-                    AnimatedBar((d.eaten / maxV).toFloat(), KcalYellow, height = 6.dp)
-                    Spacer(Modifier.height(4.dp))
-                    Hint("Verbrannt ${Calc.fmtNum(d.burned)}")
-                    AnimatedBar((d.burned / maxV).toFloat(), Accent, height = 6.dp)
-                }
-                Tile(Modifier.weight(1f).fillMaxHeight(), title = "🩸 Vitalwerte", accent = Color(0xFFEF5350), onClick = { detail = Detail.VITALS }) {
-                    val sp = spo2.firstOrNull()
-                    if (sp != null) {
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            CountUp(sp.pct.roundToInt(), fontSize = 22.sp, color = spo2Color(sp.pct), suffix = " %")
+                "timeline" -> {
+                        // ---------- Zeitleiste ----------
+                        Appear(i++) {
+                            Tile(Modifier.fillMaxWidth().padding(bottom = 12.dp), title = "Dein Tag · 0–24 Uhr") {
+                                DayTimeline(
+                                    day = today,
+                                    sleep = d.sleep,
+                                    sessions = d.sessions,
+                                    food = food.filter { it.t in today until Calc.addDays(today, 1) },
+                                    water = water.filter { it.t in today until Calc.addDays(today, 1) },
+                                    hr = hrToday,
+                                    maxHr = profile.effectiveMaxHr,
+                                )
+                            }
                         }
-                        Hint("SpO₂ · ${Calc.fmtShortDate(sp.t)}")
-                    } else {
-                        Hint("Noch kein Blutsauerstoff")
-                    }
-                    Spacer(Modifier.weight(1f))
-                    val st = skin[today] ?: skin[Calc.addDays(today, -1)]
-                    val dev = st?.deviation
-                    Text(
-                        "🌡️ " + when {
-                            dev != null -> "${if (dev >= 0) "+" else "−"}${Calc.fmtNum(abs(dev), 1)} °C"
-                            else -> "–"
-                        },
-                        color = if (dev != null && dev >= 0.5) Bad else Color.Unspecified, fontWeight = FontWeight.SemiBold,
-                    )
-                    Hint("Hauttemperatur")
                 }
-            }
-        }
-
-        // ---------- Tabletten ----------
-        Appear(i++) {
-            Tile(Modifier.fillMaxWidth().padding(bottom = 12.dp), title = "💊 Tabletten", accent = PillColor, onClick = { detail = Detail.SUPPS }) {
-                SuppTileContent()
-            }
-        }
-
-        // ---------- Gewicht ----------
-        Appear(i++) {
-            Tile(Modifier.fillMaxWidth().padding(bottom = 12.dp), title = "⚖️ Gewicht", accent = WeightTeal, onClick = { detail = Detail.WEIGHT }) {
-                WeightTileContent()
-            }
-        }
-
-        // ---------- Training + Woche ----------
-        Appear(i++) {
-            Tile(Modifier.fillMaxWidth().padding(bottom = 12.dp), title = "🏍️ Training & Woche", onClick = { detail = Detail.TRAINING }) {
-                if (d.sessions.isEmpty()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Hint("Heute noch kein Training.", Modifier.weight(1f))
-                        Button(onClick = onOpenTraining) { Text("Starten") }
-                    }
-                } else {
-                    d.sessions.forEach { s ->
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-                            Text(s.type.emoji, fontSize = 20.sp)
-                            Text("  ${s.title}", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                            Text("${Calc.fmtDuration(s.durationMs)} · ${Calc.fmtNum(s.kcal)} kcal", style = MaterialTheme.typography.bodySmall)
+                "recovery" -> {
+                        // ---------- Erholung | Puls ----------
+                        Appear(i++) {
+                            TileRow {
+                                Tile(Modifier.weight(1f).fillMaxHeight(), title = "🔋 Erholung", accent = rechargeColor(rec?.status), onClick = { detail = Detail.RECOVERY }) {
+                                    if (rec?.status != null) {
+                                        Text(rechargeText(rec.status).replaceFirstChar { it.uppercase() }, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = rechargeColor(rec.status))
+                                        Spacer(Modifier.height(4.dp))
+                                        rec.hrv?.let { Text("HRV ${it.roundToInt()} ms", style = MaterialTheme.typography.bodyMedium) }
+                                        rec.sleepScore?.let { Hint("Schlaf-Score $it") }
+                                        Spacer(Modifier.weight(1f))
+                                        AnimatedBar((rec.status / 6f), rechargeColor(rec.status))
+                                    } else {
+                                        Hint("Kommt nach den ersten Nächten mit der Uhr.")
+                                    }
+                                }
+                                Tile(Modifier.weight(1f).fillMaxHeight(), title = "Puls", accent = Color(0xFFFF7043), onClick = { detail = Detail.HEART }) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        BeatingHeart(hr?.resting)
+                                        Spacer(Modifier.width(6.dp))
+                                        if (hr?.resting != null) CountUp(hr.resting, fontSize = 24.sp) else Text("–", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Hint(if (hr?.resting != null) "Ruhepuls" else "Ruhepuls nach der ersten Nacht")
+                                    Spacer(Modifier.weight(1f))
+                                    hrToday?.points?.let { Sparkline(it, Modifier.fillMaxWidth().height(36.dp), start = today, end = maxOf(System.currentTimeMillis(), today + 3_600_000)) }
+                                }
+                            }
                         }
-                    }
                 }
-                Spacer(Modifier.height(10.dp))
-                WeekBars(weekDays.map { (it.activeMs / 60_000).toInt() to it.sessions.map { s -> s.type } }, activeGoalMin.toInt())
+                "sleepwater" -> {
+                        // ---------- Schlaf | Trinken ----------
+                        Appear(i++) {
+                            TileRow {
+                                Tile(Modifier.weight(1f).fillMaxHeight(), title = "😴 Schlaf", accent = SleepPurple, onClick = { detail = Detail.SLEEP }) {
+                                    val s = d.sleep
+                                    if (s != null) {
+                                        val min = (s.asleepMs / 60_000).toInt()
+                                        CountUp(min, fontSize = 24.sp, format = { "${it / 60}:${(it % 60).toString().padStart(2, '0')}" }, suffix = " h")
+                                        Hint("${Calc.fmtClock(s.start)}–${Calc.fmtClock(s.end)}")
+                                        Spacer(Modifier.weight(1f))
+                                        if (s.hasStages) SleepStageBar(s.deepMs, s.remMs, s.lightMs, s.awakeMs)
+                                        else AnimatedBar(s.asleepMs / (goals.sleepHours * 3_600_000).toFloat(), SleepPurple)
+                                    } else {
+                                        Hint("Noch kein Schlaf für heute Nacht.")
+                                        Spacer(Modifier.weight(1f))
+                                        TextButton(onClick = { showSleep = true }, contentPadding = PaddingValues(0.dp)) { Text("Eintragen") }
+                                    }
+                                }
+                                Tile(Modifier.weight(1f).fillMaxHeight(), title = "💧 Trinken", accent = WaterBlue, onClick = { detail = Detail.WATER }) {
+                                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                        WaterGlass(d.waterMl.toFloat() / d.waterGoal.coerceAtLeast(1), Modifier.width(38.dp).fillMaxHeight())
+                                        Spacer(Modifier.width(10.dp))
+                                        Column {
+                                            CountUp(d.waterMl, fontSize = 20.sp, suffix = " ml")
+                                            Hint("von ${Calc.fmtNum(d.waterGoal / 1000.0, 1)} l")
+                                        }
+                                    }
+                                    FilledTonalButton(
+                                        onClick = { Repo.addWater(250) },
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                        modifier = Modifier.fillMaxWidth().height(32.dp).padding(top = 4.dp),
+                                    ) { Text("+250 ml", fontSize = 13.sp) }
+                                }
+                            }
+                        }
+                }
+                "kcal" -> {
+                        // ---------- Kalorien | Vitalwerte ----------
+                        Appear(i++) {
+                            TileRow {
+                                Tile(Modifier.weight(1f).fillMaxHeight(), title = "🔥 Kalorien", accent = KcalYellow, onClick = { detail = Detail.KCAL }) {
+                                    val inRange = d.balance >= goals.mode.lo && d.balance <= goals.mode.hi
+                                    CountUp(
+                                        abs(d.balance).roundToInt(), fontSize = 22.sp,
+                                        prefix = if (d.balance < 0) "−" else "+", suffix = " kcal",
+                                        color = if (d.foodCount == 0) Color.Unspecified else if (inRange) Good else Accent,
+                                    )
+                                    Hint(if (d.foodCount == 0) "noch nichts gegessen" else "Bilanz")
+                                    Spacer(Modifier.weight(1f))
+                                    val maxV = maxOf(d.eaten, d.burned).coerceAtLeast(1.0)
+                                    Hint("Gegessen ${Calc.fmtNum(d.eaten)}")
+                                    AnimatedBar((d.eaten / maxV).toFloat(), KcalYellow, height = 6.dp)
+                                    Spacer(Modifier.height(4.dp))
+                                    Hint("Verbrannt ${Calc.fmtNum(d.burned)}")
+                                    AnimatedBar((d.burned / maxV).toFloat(), Accent, height = 6.dp)
+                                }
+                                Tile(Modifier.weight(1f).fillMaxHeight(), title = "🩸 Vitalwerte", accent = Color(0xFFEF5350), onClick = { detail = Detail.VITALS }) {
+                                    val sp = spo2.firstOrNull()
+                                    if (sp != null) {
+                                        Row(verticalAlignment = Alignment.Bottom) {
+                                            CountUp(sp.pct.roundToInt(), fontSize = 22.sp, color = spo2Color(sp.pct), suffix = " %")
+                                        }
+                                        Hint("SpO₂ · ${Calc.fmtShortDate(sp.t)}")
+                                    } else {
+                                        Hint("Noch kein Blutsauerstoff")
+                                    }
+                                    Spacer(Modifier.weight(1f))
+                                    val st = skin[today] ?: skin[Calc.addDays(today, -1)]
+                                    val dev = st?.deviation
+                                    Text(
+                                        "🌡️ " + when {
+                                            dev != null -> "${if (dev >= 0) "+" else "−"}${Calc.fmtNum(abs(dev), 1)} °C"
+                                            else -> "–"
+                                        },
+                                        color = if (dev != null && dev >= 0.5) Bad else Color.Unspecified, fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Hint("Hauttemperatur")
+                                }
+                            }
+                        }
+                }
+                "pills" -> {
+                        // ---------- Tabletten ----------
+                        Appear(i++) {
+                            Tile(Modifier.fillMaxWidth().padding(bottom = 12.dp), title = "💊 Tabletten", accent = PillColor, onClick = { detail = Detail.SUPPS }) {
+                                SuppTileContent()
+                            }
+                        }
+                }
+                "weight" -> {
+                        // ---------- Gewicht ----------
+                        Appear(i++) {
+                            Tile(Modifier.fillMaxWidth().padding(bottom = 12.dp), title = "⚖️ Gewicht", accent = WeightTeal, onClick = { detail = Detail.WEIGHT }) {
+                                WeightTileContent()
+                            }
+                        }
+                }
+                "training" -> {
+                        // ---------- Training + Woche ----------
+                        Appear(i++) {
+                            Tile(Modifier.fillMaxWidth().padding(bottom = 12.dp), title = "🏍️ Training & Woche", onClick = { detail = Detail.TRAINING }) {
+                                if (d.sessions.isEmpty()) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Hint("Heute noch kein Training.", Modifier.weight(1f))
+                                        Button(onClick = onOpenTraining) { Text("Starten") }
+                                    }
+                                } else {
+                                    d.sessions.forEach { s ->
+                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                                            Text(s.type.emoji, fontSize = 20.sp)
+                                            Text("  ${s.title}", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                                            Text("${Calc.fmtDuration(s.durationMs)} · ${Calc.fmtNum(s.kcal)} kcal", style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.height(10.dp))
+                                WeekBars(weekDays.map { (it.activeMs / 60_000).toInt() to it.sessions.map { s -> s.type } }, activeGoalMin.toInt())
+                            }
+                        }
+                }
+                "exercise" -> Appear(i++) { ExerciseTodayTile() }
             }
         }
+        TextButton(onClick = { editDash = true }, modifier = Modifier.fillMaxWidth()) { Text("✏️ Kacheln anordnen") }
         Spacer(Modifier.height(8.dp))
     }
+
+    if (editDash) DashEditDialog(onDismiss = { editDash = false; dashRev++ })
 
     // ---------- Details von unten ----------
     detail?.let { which ->

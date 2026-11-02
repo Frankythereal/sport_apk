@@ -58,6 +58,8 @@ fun AppRoot() {
             w == "today" -> tab = 0
             w == "food" || w == "supps" -> tab = 2
             w == "supp_add" -> { Nav.suppAdd.value = true; tab = 2 }
+            w == "exercise_next" -> ExerciseNav.open.value = de.endurofit.work.BreakMode.nextExercise(ctx).id
+            w.startsWith("exercise_") -> ExerciseNav.open.value = w.removePrefix("exercise_")
             w.startsWith("food_") -> { Nav.foodAction.value = w.removePrefix("food_"); tab = 2 }
             w == "training" -> tab = 1
             w.startsWith("start_") -> {
@@ -119,6 +121,8 @@ fun AppRoot() {
             }
         }
     }
+
+    ExerciseHost()
 
     fitResult?.let { r ->
         FitResultDialog(

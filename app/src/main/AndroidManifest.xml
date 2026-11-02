@@ -119,6 +119,7 @@
         <!-- Tabletten-Erinnerungen -->
         <receiver android:name=".supp.SuppReminderReceiver" android:exported="false" />
         <receiver android:name=".supp.SuppTakenReceiver" android:exported="false" />
+        <receiver android:name=".work.BreakReceiver" android:exported="false" />
         <receiver android:name=".supp.SuppBootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

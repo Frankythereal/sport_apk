@@ -31,6 +31,7 @@ class App : Application() {
         super.onCreate()
         Repo.init(this)
         de.endurofit.supp.SuppReminders.schedule(this)
+        de.endurofit.work.BreakMode.load(this)
         // Widgets aktualisieren, sobald sich etwas ändert (Trinken, Essen, Schritte, Erholung …)
         appScope.launch {
             kotlinx.coroutines.flow.merge(

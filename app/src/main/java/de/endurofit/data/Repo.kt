@@ -294,6 +294,14 @@ object Repo {
         _supps.value.firstOrNull { it.id == i.suppId }?.let { saveSupp(it.copy(stock = it.stock + i.units)) }
     }
 
+    /** Reihenfolge / ausgeblendete Kacheln auf „Heute“ */
+    var dashOrder: String
+        get() = prefs.getString("dash_order", "") ?: ""
+        set(v) = prefs.edit().putString("dash_order", v).apply()
+    var dashHidden: String
+        get() = prefs.getString("dash_hidden", "") ?: ""
+        set(v) = prefs.edit().putString("dash_hidden", v).apply()
+
     /** Erinnerungen an Tabletten */
     var suppReminders: Boolean
         get() = prefs.getBoolean("supp_reminders", true)

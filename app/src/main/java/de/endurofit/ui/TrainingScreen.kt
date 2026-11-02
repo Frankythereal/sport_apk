@@ -225,6 +225,8 @@ fun TrainingScreen(onSaved: (String) -> Unit) {
                     }
                 }
             }
+            // ---------- Übungen für zwischendurch ----------
+            Appear(idx++) { Column { ExerciseSection() } }
         } else {
             val samples = remember(rev) { Recorder.snapshot() }
             val elapsed = now - l.start

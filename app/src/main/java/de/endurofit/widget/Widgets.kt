@@ -360,6 +360,7 @@ private fun TrainingContent(ctx: Context, d: WidgetData) {
                 SessionType.entries.forEach { t ->
                     Key(t.emoji, t.label, typeColor(t), open(ctx, "start_${t.name}"), GlanceModifier.defaultWeight(), size = 20.sp)
                 }
+                Key("🧘", "Pause", cp(0xFF26C6DA), open(ctx, "exercise_next"), GlanceModifier.defaultWeight(), size = 20.sp)
             }
         }
     }
