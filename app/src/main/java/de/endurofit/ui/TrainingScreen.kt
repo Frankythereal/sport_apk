@@ -345,7 +345,7 @@ private fun GymPanel(l: Recorder.Live) {
             enabled = exercise.isNotBlank(),
             onClick = { Recorder.addSet(GymSet(exercise.trim(), reps.roundToInt(), weight, System.currentTimeMillis())) },
             modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
         ) { Text("✓  Satz speichern", fontSize = 16.sp) }
 
         if (l.sets.isNotEmpty()) {
@@ -373,7 +373,7 @@ private fun GymPanel(l: Recorder.Live) {
 @Composable
 private fun ZoneChip(zone: Int) {
     Box(
-        Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).background(zoneColor(zone).copy(alpha = 0.25f))
+        Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp)).background(zoneColor(zone).copy(alpha = 0.25f))
             .padding(horizontal = 10.dp, vertical = 4.dp)
     ) { Text(Calc.zoneNames[zone].substringBefore(" ·"), color = zoneColor(zone), fontWeight = FontWeight.Bold) }
 }

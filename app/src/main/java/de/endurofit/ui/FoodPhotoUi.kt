@@ -138,7 +138,7 @@ private fun FoodPhotoFlow(uri: Uri, day: Long, onDone: () -> Unit) {
                 preview?.let {
                     Image(
                         it, null, contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(12.dp))
+                        modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(4.dp))
                     )
                 }
                 if (noKey) {
@@ -194,7 +194,7 @@ private fun FoodResultDialog(r: FoodVision.Result, preview: ImageBitmap?, day: L
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 preview?.let {
-                    Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().height(140.dp).clip(RoundedCornerShape(12.dp)))
+                    Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().height(140.dp).clip(RoundedCornerShape(4.dp)))
                 }
                 if (!r.isFood) {
                     Text("Auf dem Foto habe ich nichts zu essen gefunden. Versuch es mit einem anderen Foto oder trag es von Hand ein.")

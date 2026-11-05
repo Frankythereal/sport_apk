@@ -77,7 +77,7 @@ fun ProfileScreen(onOpenSession: (String) -> Unit = {}) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         Modifier.size(58.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                            .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Accent, androidx.compose.ui.graphics.Color(0xFFD7192D)))),
+                            .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Accent, androidx.compose.ui.graphics.Color(0xFF1E5B51)))),
                         contentAlignment = Alignment.Center,
                     ) { Text("🏍️", fontSize = 28.sp) }
                     Spacer(Modifier.width(14.dp))
@@ -381,7 +381,7 @@ private fun HealthDiagnosis() {
 private fun StatusPill(label: String, ok: Boolean) {
     val c = if (ok) Good else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).background(c.copy(alpha = 0.15f)).padding(horizontal = 10.dp, vertical = 4.dp),
+        Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp)).background(c.copy(alpha = 0.15f)).padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(if (ok) "✓ " else "○ ", color = c, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)

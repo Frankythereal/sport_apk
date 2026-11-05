@@ -36,8 +36,8 @@ fun WatchPicker(selected: String?, onSelect: (WatchBrand) -> Unit) {
                 val on = b.id == selected
                 val bg by animateColorAsState(if (on) Accent.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceVariant, label = "bg")
                 Column(
-                    Modifier.weight(1f).height(92.dp).clip(RoundedCornerShape(18.dp)).background(bg)
-                        .then(if (on) Modifier.border(2.dp, Accent, RoundedCornerShape(18.dp)) else Modifier)
+                    Modifier.weight(1f).height(92.dp).clip(RoundedCornerShape(4.dp)).background(bg)
+                        .then(if (on) Modifier.border(2.dp, Accent, RoundedCornerShape(4.dp)) else Modifier)
                         .clickable { onSelect(b) }.padding(10.dp),
                     verticalArrangement = Arrangement.Center,
                 ) {
@@ -64,7 +64,7 @@ fun WatchInstructions(b: WatchBrand, onConnected: (() -> Unit)? = null) {
     Spacer(Modifier.height(6.dp))
     b.steps.forEachIndexed { i, st ->
         Row(Modifier.padding(vertical = 3.dp)) {
-            Box(Modifier.size(22.dp).clip(RoundedCornerShape(11.dp)).background(Accent), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(22.dp).clip(RoundedCornerShape(4.dp)).background(Accent), contentAlignment = Alignment.Center) {
                 Text("${i + 1}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
             Spacer(Modifier.width(8.dp))

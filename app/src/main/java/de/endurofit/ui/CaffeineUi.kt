@@ -86,7 +86,7 @@ fun CaffeineCard(collapsed: Boolean = false) {
             Text("400 mg = Tageslimit", style = MaterialTheme.typography.labelSmall)
         }
         Column(
-            Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(14.dp))
+            Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(4.dp))
                 .background(levelColor(v.level).copy(alpha = 0.12f)).padding(10.dp)
         ) {
             Text((if (v.level == 2) "⚠️ " else if (v.level == 1) "☝️ " else "✓ ") + v.title, fontWeight = FontWeight.Bold, color = levelColor(v.level))
@@ -99,7 +99,7 @@ fun CaffeineCard(collapsed: Boolean = false) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 6.dp)) {
             items(Caffeine.drinks) { d ->
                 Column(
-                    Modifier.width(92.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
+                    Modifier.width(92.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
                         .clickable { add(d) }.padding(8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {

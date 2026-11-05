@@ -114,7 +114,7 @@ fun SuppCard(collapsed: Boolean = false) {
             Text("Jetzt sinnvoll", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             due.forEach { d ->
                 Row(
-                    Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(14.dp))
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(4.dp))
                         .background(suppColor(d.supp.kind).copy(alpha = 0.12f)).padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -265,9 +265,9 @@ private fun SuppCalendarView(supps: List<Supplement>, intakes: List<SuppIntake>)
                         val taken = intakes.filter { it.t in day until dayEnd }.mapNotNull { byId[it.suppId] }.distinctBy { it.id }
                         val isSel = selected == day
                         Column(
-                            Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
+                            Modifier.fillMaxSize().clip(RoundedCornerShape(4.dp))
                                 .background(if (isSel) PillColor.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (day > today) 0.2f else 0.6f))
-                                .then(if (day == today) Modifier.border(1.5.dp, PillColor, RoundedCornerShape(10.dp)) else Modifier)
+                                .then(if (day == today) Modifier.border(1.5.dp, PillColor, RoundedCornerShape(4.dp)) else Modifier)
                                 .clickable(enabled = day <= today) { selected = if (isSel) null else day },
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
@@ -339,7 +339,7 @@ private fun SuppRow(s: Supplement, onEdit: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     val low = s.active && Supps.relevant(s) && s.daysLeft < 14
     Column(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(14.dp))
+        Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(4.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (s.active) 0.7f else 0.3f))
             .clickable { open = !open }.padding(10.dp)
     ) {

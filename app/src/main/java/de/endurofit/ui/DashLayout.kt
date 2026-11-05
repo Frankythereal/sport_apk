@@ -63,7 +63,7 @@ fun DashEditDialog(onDismiss: () -> Unit) {
                 order.forEachIndexed { i, key ->
                     val on = key !in hidden
                     Row(
-                        Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(12.dp))
+                        Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(4.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (on) 0.8f else 0.3f))
                             .padding(start = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,

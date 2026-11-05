@@ -478,7 +478,7 @@ private fun WeekBars(days: List<Pair<Int, List<SessionType>>>, goal: Int) {
         days.forEachIndexed { idx, (min, types) ->
             val h by animateFloatAsState(if (started) min.toFloat() / maxV else 0f, tween(800, delayMillis = idx * 70, easing = FastOutSlowInEasing), label = "wb$idx")
             val color = when {
-                SessionType.ENDURO in types -> Color(0xFFFF6D00)
+                SessionType.ENDURO in types -> Color(0xFF59EBD8)
                 SessionType.GYM in types -> ActiveGreen
                 min >= goal -> Color(0xFF26C6DA)
                 else -> Color(0xFF555555)

@@ -208,9 +208,9 @@ fun NumField(label: String, value: String, onChange: (String) -> Unit, modifier:
 }
 
 fun typeColor(t: de.endurofit.data.SessionType): Color = when (t) {
-    de.endurofit.data.SessionType.ENDURO -> Color(0xFFFF6D00)
-    de.endurofit.data.SessionType.GYM -> Color(0xFF66BB6A)
-    de.endurofit.data.SessionType.OTHER -> Color(0xFF26C6DA)
+    de.endurofit.data.SessionType.ENDURO -> Color(0xFF59EBD8)
+    de.endurofit.data.SessionType.GYM -> Color(0xFF3FA7D6)
+    de.endurofit.data.SessionType.OTHER -> Color(0xFFB7C9C5)
 }
 
 /** Training als Kachel: farbiger Streifen je Sportart, kleine Pulskurve, Kalorien. */
@@ -220,7 +220,7 @@ fun SessionRow(s: Session, onClick: () -> Unit) {
     Tile(Modifier.fillMaxWidth().padding(bottom = 10.dp), onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(c.copy(alpha = 0.2f)),
+                Modifier.size(44.dp).clip(RoundedCornerShape(4.dp)).background(c.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center,
             ) { Text(s.type.emoji, fontSize = 22.sp) }
             Spacer(Modifier.width(12.dp))

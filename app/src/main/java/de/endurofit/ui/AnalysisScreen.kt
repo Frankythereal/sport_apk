@@ -123,7 +123,7 @@ private fun AnalysisContent(onSelect: (String) -> Unit) {
         Segmented(Period.entries.map { it to it.label }, period, { period = it; offset = 0 })
         Spacer(Modifier.height(8.dp))
         Row(
-            Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+            Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant).padding(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

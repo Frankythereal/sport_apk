@@ -36,7 +36,7 @@ private val WaterColor = Color(0xFF42A5F5)
 private val HrColor = Color(0xFFFF7043)
 
 private fun sessionColor(t: SessionType) = when (t) {
-    SessionType.ENDURO -> Color(0xFFFF6D00)
+    SessionType.ENDURO -> Color(0xFF59EBD8)
     SessionType.GYM -> Color(0xFF66BB6A)
     SessionType.OTHER -> Color(0xFF26C6DA)
 }
@@ -168,7 +168,7 @@ fun DayTimeline(
                 val px = x(it.t)
                 if (px <= limit) {
                     drawCircle(FoodColor, 5.dp.toPx(), Offset(px, dotY))
-                    drawCircle(Color(0xFF1F1F1F), 2.dp.toPx(), Offset(px, dotY))
+                    drawCircle(Color(0xFF000000), 2.dp.toPx(), Offset(px, dotY))
                 }
             }
             // Jetzt-Linie
@@ -189,7 +189,7 @@ fun DayTimeline(
         Spacer(Modifier.height(4.dp))
         Hint(info ?: if (hr != null && hr.points.size > 1) "Puls: Skala rechts in bpm · dünne Linie = Ruhepuls · Farbe = Pulszone. Antippen zeigt die Uhrzeit." else "Tippe auf die Zeitleiste, um zu sehen, was um diese Uhrzeit war.")
         Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            listOf(SleepColor to "Schlaf", Color(0xFFFF6D00) to "Training", FoodColor to "Essen", WaterColor to "Trinken", HrColor to "Puls").forEach { (c, l) ->
+            listOf(SleepColor to "Schlaf", Color(0xFF59EBD8) to "Training", FoodColor to "Essen", WaterColor to "Trinken", HrColor to "Puls").forEach { (c, l) ->
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     Canvas(Modifier.size(8.dp)) { drawCircle(c) }
                     Text(" $l", style = MaterialTheme.typography.labelSmall)

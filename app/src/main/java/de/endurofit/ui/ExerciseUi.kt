@@ -173,7 +173,7 @@ fun ExercisePlayer(list: List<Exercise>, onClose: () -> Unit) {
     }
 
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth(0.94f).fillMaxHeight(0.9f), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
+        Surface(Modifier.fillMaxWidth(0.94f).fillMaxHeight(0.9f), shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -184,7 +184,7 @@ fun ExercisePlayer(list: List<Exercise>, onClose: () -> Unit) {
                     IconButton(onClick = onClose) { Text("✕", fontSize = 20.sp) }
                 }
                 Box(
-                    Modifier.fillMaxWidth().height(260.dp).padding(vertical = 8.dp).clip(RoundedCornerShape(20.dp))
+                    Modifier.fillMaxWidth().height(260.dp).padding(vertical = 8.dp).clip(RoundedCornerShape(4.dp))
                         .background(catColor(ex.cat).copy(alpha = 0.08f)),
                     contentAlignment = Alignment.Center,
                 ) {

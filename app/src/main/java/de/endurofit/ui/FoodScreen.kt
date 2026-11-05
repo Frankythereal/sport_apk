@@ -86,7 +86,7 @@ fun FoodScreen() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp)) {
         // ---------- Tag wählen ----------
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(4.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { day = Calc.addDays(day, -1) }) { Text("‹", fontSize = 26.sp) }
@@ -143,7 +143,7 @@ fun FoodScreen() {
                             SuggestionChip(
                                 onClick = { prefill = f; dialog = true },
                                 label = { Text("${if (f.fromPhoto) "📷 " else ""}${f.name} · ${Calc.fmtNum(f.kcal)}", maxLines = 1) },
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(4.dp),
                             )
                         }
                     }
@@ -231,7 +231,7 @@ fun FoodScreen() {
             val d = deleted
             if (d != null) {
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0xFF333333)).padding(horizontal = 14.dp, vertical = 6.dp),
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).background(Color(0xFF0F2A26)).padding(horizontal = 14.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("„${d.name}“ gelöscht", Modifier.weight(1f), maxLines = 1)
@@ -286,7 +286,7 @@ private fun SwipeFoodRow(e: FoodEntry, onClick: () -> Unit, onDelete: () -> Unit
         modifier = Modifier.padding(bottom = 8.dp),
         backgroundContent = {
             val c by animateColorAsState(if (state.targetValue == SwipeToDismissBoxValue.EndToStart) Bad else Color(0xFF3A1F1F), label = "swipe")
-            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(22.dp)).background(c).padding(end = 20.dp), contentAlignment = Alignment.CenterEnd) {
+            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(4.dp)).background(c).padding(end = 20.dp), contentAlignment = Alignment.CenterEnd) {
                 Text("🗑️", fontSize = 22.sp)
             }
         },
@@ -294,7 +294,7 @@ private fun SwipeFoodRow(e: FoodEntry, onClick: () -> Unit, onDelete: () -> Unit
         Tile(Modifier.fillMaxWidth(), onClick = onClick) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(KcalC.copy(alpha = 0.16f)),
+                    Modifier.size(40.dp).clip(RoundedCornerShape(4.dp)).background(KcalC.copy(alpha = 0.16f)),
                     contentAlignment = Alignment.Center,
                 ) { Text(if (e.fromPhoto) "📷" else "🍽️", fontSize = 18.sp) }
                 Spacer(Modifier.width(12.dp))

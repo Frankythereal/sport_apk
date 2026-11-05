@@ -47,9 +47,9 @@ fun HistoryScreen(selected: String?, onSelect: (String?) -> Unit) {
                 Stat("kcal", Calc.fmtNum(month.sumOf { it.kcal }), Modifier.weight(1f).fillMaxHeight())
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 10.dp).horizontalScroll(rememberScrollState())) {
-                FilterChip(selected = filter == null, onClick = { filter = null }, label = { Text("Alle") }, shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+                FilterChip(selected = filter == null, onClick = { filter = null }, label = { Text("Alle") }, shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
                 SessionType.entries.forEach { t ->
-                    FilterChip(selected = filter == t, onClick = { filter = t }, label = { Text(t.emoji + " " + t.label) }, shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+                    FilterChip(selected = filter == t, onClick = { filter = t }, label = { Text(t.emoji + " " + t.label) }, shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
                 }
             }
             if (shown.isEmpty()) Hint("Noch keine Trainings gespeichert.")
