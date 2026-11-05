@@ -5,209 +5,203 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.endurofit.data.KcalMode
 import de.endurofit.data.Repo
 import de.endurofit.data.Watches
 
-/** Geführte Einrichtung beim ersten Start – lässt sich jederzeit überspringen und im Profil erneut starten. */
+/** Geführte Einrichtung beim ersten Start – eine Frage pro Seite, jederzeit überspringbar. */
 @Composable
 fun Onboarding(onDone: () -> Unit) {
-    val pages = 7
+    val last = 9
     var page by rememberSaveable { mutableIntStateOf(0) }
     fun finish() { Repo.onboarded = true; onDone() }
 
-    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(Modifier.fillMaxSize().systemBarsPadding().padding(20.dp)) {
-            // Fortschritt
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    for (i in 0 until pages) {
-                        val w by animateFloatAsState(if (i == page) 1f else 0f, label = "dot")
-                        Box(
-                            Modifier.height(6.dp).width((10 + 18 * w).dp).clip(RoundedCornerShape(3.dp))
-                                .background(if (i <= page) Accent else MaterialTheme.colorScheme.surfaceVariant)
-                        )
-                    }
+    Surface(Modifier.fillMaxSize(), color = Ef.Ink) {
+        Column(Modifier.fillMaxSize().systemBarsPadding()) {
+            if (page > 0) {
+                Column(Modifier.padding(horizontal = 20.dp).padding(top = 14.dp)) {
+                    SquareStepper(last, page - 1)
                 }
-                if (page < pages - 1) TextButton(onClick = { finish() }) { Text("Überspringen") }
             }
-            Spacer(Modifier.height(12.dp))
-
             AnimatedContent(
                 targetState = page, modifier = Modifier.weight(1f),
                 transitionSpec = {
                     val dir = if (targetState > initialState) 1 else -1
-                    (fadeIn() + slideInHorizontally { it * dir / 5 }) togetherWith fadeOut()
+                    (fadeIn() + slideInHorizontally { it * dir / 6 }) togetherWith fadeOut()
                 }, label = "page",
             ) { p ->
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                if (p == 0) Welcome()
+                else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
                     when (p) {
-                        0 -> Welcome()
-                        1 -> AboutYou()
-                        2 -> ChooseWatch()
-                        3 -> ConnectWatch()
-                        4 -> SensorPage()
-                        5 -> GoalsPage()
+                        1 -> SexAge()
+                        2 -> Weight()
+                        3 -> Height()
+                        4 -> Goal()
+                        5 -> ChooseWatch()
+                        6 -> ConnectWatch()
+                        7 -> SensorPage()
+                        8 -> StepsAndNotif()
                         else -> DonePage()
+                    }
+                    if (p in 1..8) TextButton(onClick = { finish() }, contentPadding = PaddingValues(0.dp)) {
+                        Caps("Später einrichten ›", color = Accent)
                     }
                 }
             }
-
-            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (page > 0) OutlinedButton(onClick = { page-- }, modifier = Modifier.weight(1f)) { Text("Zurück") }
-                Button(
-                    onClick = { if (page < pages - 1) page++ else finish() },
-                    modifier = Modifier.weight(2f),
-                ) { Text(if (page == 0) "Los geht's" else if (page < pages - 1) "Weiter" else "Fertig – zur App") }
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
+                when (page) {
+                    0 -> Button(onClick = { page++ }, modifier = Modifier.fillMaxWidth()) { Text("LOS GEHT'S  ▶") }
+                    last -> Button(onClick = { finish() }, modifier = Modifier.fillMaxWidth()) { Text("ZUR APP  ▶") }
+                    else -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { page-- }) { Text("‹") }
+                        FilledTonalButton(onClick = { page++ }, modifier = Modifier.weight(1f)) { Text("WEITER  ›") }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun Big(emoji: String, title: String, text: String) {
-    Text(emoji, fontSize = 52.sp, modifier = Modifier.padding(top = 8.dp))
-    Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
-    Text(text, style = MaterialTheme.typography.bodyLarge, color = Color(0xFFBDBDBD), modifier = Modifier.padding(top = 6.dp, bottom = 16.dp))
-}
-
-@Composable
-private fun Feature(emoji: String, title: String, text: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(12.dp)) {
-        Text(emoji, fontSize = 24.sp)
-        Spacer(Modifier.width(10.dp))
-        Column {
-            Text(title, fontWeight = FontWeight.SemiBold)
-            Hint(text)
-        }
-    }
+private fun Question(before: String, accent: String = "", after: String = "", sub: String? = null) {
+    AccentTitle(before, accent, after, Modifier.padding(top = 18.dp))
+    if (sub != null) Text(sub, style = MaterialTheme.typography.bodyMedium, color = Ef.Muted, modifier = Modifier.padding(top = 8.dp))
+    Spacer(Modifier.height(20.dp))
 }
 
 @Composable
 private fun Welcome() {
-    Big("🏍️", "Willkommen bei EnduroFit", "Dein Training, Essen, Schlaf und deine Uhr an einem Ort. In ein paar Schritten ist alles eingerichtet.")
-    Feature("❤️", "Puls & Training", "Live-Puls mit Zonen und Spitzen, Gym-Sätze, Trainings von der Uhr")
-    Feature("🍽️", "Essen & Trinken", "Per Foto, Text oder von Hand – mit Kalorienbilanz")
-    Feature("😴", "Schlaf & Erholung", "Von deiner Uhr, mit Ruhepuls-Verlauf")
-    Feature("💊", "Tabletten, Kaffee, Gewicht", "Erinnerungen, Koffein-Warnung, Waage")
-    Hint("Alle Daten bleiben auf deinem Handy.", Modifier.padding(top = 10.dp))
+    val ex = remember { ExerciseLib.byId("strecken")!! }
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxWidth().weight(1f).background(Color(0xFF8FC9C0)), contentAlignment = Alignment.Center) {
+            ExerciseFigure(ex, Modifier.fillMaxSize().padding(40.dp), color = Color(0xFF0A1715))
+        }
+        Column(Modifier.padding(20.dp)) {
+            Caps("Dein Trainings-Begleiter", color = Accent)
+            Spacer(Modifier.height(10.dp))
+            Text("Willkommen bei EnduroFit", style = MaterialTheme.typography.headlineLarge, color = Ef.Text)
+            Text(
+                "Training, Puls, Essen, Schlaf, Tabletten und deine Uhr an einem Ort. In ein paar Schritten ist alles eingerichtet – alle Daten bleiben auf deinem Handy.",
+                style = MaterialTheme.typography.bodyMedium, color = Ef.Muted, modifier = Modifier.padding(top = 10.dp),
+            )
+        }
+    }
 }
 
 @Composable
-private fun AboutYou() {
-    val p0 = remember { Repo.profile.value }
-    var age by remember { mutableStateOf(p0.age.toString()) }
-    var weight by remember { mutableStateOf(de.endurofit.data.Calc.fmtNum(p0.weightKg, 1)) }
-    var height by remember { mutableStateOf(p0.heightCm.toString()) }
-    var male by remember { mutableStateOf(p0.male) }
-    LaunchedEffect(age, weight, height, male) {
-        val p = Repo.profile.value
-        Repo.saveProfile(
-            p.copy(
-                age = age.toIntOrNull()?.takeIf { it in 10..99 } ?: p.age,
-                weightKg = weight.replace(',', '.').toDoubleOrNull()?.takeIf { it in 30.0..250.0 } ?: p.weightKg,
-                heightCm = height.toIntOrNull()?.takeIf { it in 120..230 } ?: p.heightCm,
-                male = male,
-            )
-        )
+private fun SexAge() {
+    var male by remember { mutableStateOf(Repo.profile.value.male) }
+    var age by remember { mutableIntStateOf(Repo.profile.value.age) }
+    LaunchedEffect(male, age) { Repo.saveProfile(Repo.profile.value.copy(male = male, age = age)) }
+    Question("Wer ", "bist", " du?")
+    ChoiceRow("Mann", selected = male) { male = true }
+    ChoiceRow("Frau", selected = !male) { male = false }
+    Spacer(Modifier.height(20.dp))
+    Caps("Alter")
+    WheelPicker((14..90).toList(), age, { age = it }, unit = "Jahre")
+}
+
+@Composable
+private fun Weight() {
+    var w by remember { mutableIntStateOf(Repo.profile.value.weightKg.toInt()) }
+    LaunchedEffect(w) { Repo.saveProfile(Repo.profile.value.copy(weightKg = w.toDouble())) }
+    Question("Wie viel ", "wiegst", " du?", "Mit Waage wird das später automatisch aktuell gehalten.")
+    WheelPicker((35..200).toList(), w, { w = it }, unit = "kg")
+}
+
+@Composable
+private fun Height() {
+    var h by remember { mutableIntStateOf(Repo.profile.value.heightCm) }
+    LaunchedEffect(h) { Repo.saveProfile(Repo.profile.value.copy(heightCm = h)) }
+    Question("Wie ", "groß", " bist du?")
+    WheelPicker((130..220).toList(), h, { h = it }, unit = "cm")
+}
+
+@Composable
+private fun Goal() {
+    var goals by remember { mutableStateOf(Repo.goals.value) }
+    Question("Was ist dein ", "Ziel", "?")
+    val subs = mapOf(
+        KcalMode.ABNEHMEN to "Fett verbrennen, leichter werden",
+        KcalMode.HALTEN to "Fit bleiben, Gewicht halten",
+        KcalMode.AUFBAUEN to "Muskeln & Kraft aufbauen",
+    )
+    listOf(KcalMode.ABNEHMEN, KcalMode.HALTEN, KcalMode.AUFBAUEN).forEach { m ->
+        ChoiceRow(m.label, subs[m], selected = goals.mode == m) { goals = goals.copy(mode = m); Repo.saveGoals(goals) }
     }
-    Big("👤", "Über dich", "Damit stimmen Kalorien, Grundumsatz und deine Pulszonen.")
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        listOf(true to "🙋‍♂️ Mann", false to "🙋‍♀️ Frau").forEach { (m, l) ->
-            FilterChip(male == m, onClick = { male = m }, label = { Text(l, fontSize = 16.sp) }, modifier = Modifier.weight(1f).height(48.dp))
-        }
-    }
-    Spacer(Modifier.height(10.dp))
-    NumField("Alter", age, { age = it }, Modifier.fillMaxWidth(), decimal = false)
-    Spacer(Modifier.height(8.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        NumField("Gewicht (kg)", weight, { weight = it }, Modifier.weight(1f))
-        NumField("Größe (cm)", height, { height = it }, Modifier.weight(1f), decimal = false)
-    }
-    Hint("Max. Puls und Ruhepuls rechnet die App selbst aus – mit Uhr später genauer.", Modifier.padding(top = 8.dp))
+    Text(goals.mode.hint, style = MaterialTheme.typography.bodySmall, color = Ef.Muted, modifier = Modifier.padding(top = 12.dp))
 }
 
 @Composable
 private fun ChooseWatch() {
     var sel by remember { mutableStateOf(Repo.watchBrand) }
-    Big("⌚", "Welche Uhr hast du?", "Die App liest die Daten über Health Connect – fast jede Uhr kann das.")
-    WatchPicker(sel) { sel = it.id; Repo.watchBrand = it.id }
+    Question("Welche ", "Uhr", " hast du?", "Die Daten kommen über Health Connect – fast jede Uhr kann das.")
+    Watches.all.forEach { b ->
+        ChoiceRow(b.name, b.app + if (!b.healthConnect) " · nur über Umweg" else "", selected = sel == b.id) { sel = b.id; Repo.watchBrand = b.id }
+    }
 }
 
 @Composable
 private fun ConnectWatch() {
     val b = Watches.selected() ?: Watches.byId("none")!!
-    Big("🔗", "Uhr verbinden", "Einmal einrichten – danach holt die App die Daten bei jedem Öffnen automatisch.")
+    Question("Uhr ", "verbinden", "", "Einmal einrichten – danach holt die App die Daten bei jedem Öffnen automatisch.")
     WatchInstructions(b)
-    if (b.polarDirect) Hint("Tipp: Im Profil unter „Polar direkt“ bekommst du zusätzlich Erholung, HRV und Hauttemperatur.", Modifier.padding(top = 8.dp))
+    if (b.polarDirect) Hint("Tipp: Im Profil unter „Polar direkt“ kommen zusätzlich Erholung, HRV und Hauttemperatur.", Modifier.padding(top = 8.dp))
+}
+
+@Composable
+private fun Info(title: String, text: String) {
+    Column(Modifier.fillMaxWidth().padding(bottom = 1.dp).background(Ef.Panel).padding(16.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium, color = Ef.Text)
+        Text(text, style = MaterialTheme.typography.bodySmall, color = Ef.Muted)
+    }
 }
 
 @Composable
 private fun SensorPage() {
-    Big("📡", "Puls beim Training", "Für genaue Pulsspitzen (z. B. beim Enduro) kannst du einen Bluetooth-Pulssensor verbinden.")
-    Feature("💪", "Armband oder Brustgurt", "z. B. Polar Verity Sense, Polar H10, Garmin HRM, Wahoo – alles mit Bluetooth-Puls")
-    Feature("▶️", "So geht's", "Im Tab „Training“ auf „Suchen“ tippen, Sensor einschalten – fertig. Die App merkt ihn sich.")
-    Feature("⌚", "Ohne Sensor", "Kein Problem: Trainings von der Uhr kommen automatisch dazu.")
+    Question("Puls beim ", "Training", "", "Für genaue Pulsspitzen (z. B. beim Enduro) kannst du einen Bluetooth-Sensor verbinden.")
+    Info("Armband oder Brustgurt", "z. B. Polar Verity Sense, Polar H10, Garmin HRM, Wahoo – alles mit Bluetooth-Puls")
+    Info("So geht's", "Im Tab „Training“ auf „Suchen“ tippen und den Sensor einschalten. Die App merkt ihn sich.")
+    Info("Ohne Sensor", "Kein Problem – Trainings von der Uhr kommen automatisch dazu.")
 }
 
 @Composable
-private fun GoalsPage() {
+private fun StepsAndNotif() {
     var goals by remember { mutableStateOf(Repo.goals.value) }
     val notif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    Big("🎯", "Deine Ziele", "Gesunde Startwerte – alles später im Profil änderbar.")
-    Text("Was ist dein Ziel?", fontWeight = FontWeight.SemiBold)
-    KcalMode.entries.forEach { m ->
-        Row(
-            Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(14.dp))
-                .background(if (goals.mode == m) Accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant)
-                .clickable { goals = goals.copy(mode = m); Repo.saveGoals(goals) }.padding(12.dp),
-        ) {
-            Column {
-                Text(m.label, fontWeight = FontWeight.SemiBold)
-                Hint(m.hint)
-            }
-        }
-    }
-    Spacer(Modifier.height(10.dp))
-    Text("Schritte am Tag", fontWeight = FontWeight.SemiBold)
-    Segmented(listOf(6000 to "6.000", 8000 to "8.000", 10000 to "10.000", 12000 to "12.000"), goals.steps, {
-        goals = goals.copy(steps = it); Repo.saveGoals(goals)
-    }, Modifier.padding(top = 4.dp))
-    Spacer(Modifier.height(14.dp))
-    Text("Erinnerungen", fontWeight = FontWeight.SemiBold)
-    Hint("Für Tabletten, Bewegungspausen und Trainings braucht die App die Erlaubnis für Benachrichtigungen.")
+    Question("Wie viele ", "Schritte", " am Tag?")
+    WheelPicker((2..20).map { it * 1000 }, (goals.steps / 1000) * 1000, { goals = goals.copy(steps = it); Repo.saveGoals(goals) },
+        unit = "Schritte", format = { de.endurofit.data.Analysis.fmtInt(it) })
+    Spacer(Modifier.height(16.dp))
+    Caps("Erinnerungen")
+    Text("Für Tabletten, Bewegungspausen und Trainings braucht die App die Erlaubnis für Benachrichtigungen.", style = MaterialTheme.typography.bodySmall, color = Ef.Muted, modifier = Modifier.padding(vertical = 6.dp))
     if (Build.VERSION.SDK_INT >= 33) {
-        OutlinedButton(onClick = { notif.launch(Manifest.permission.POST_NOTIFICATIONS) }, modifier = Modifier.padding(top = 6.dp)) { Text("🔔 Benachrichtigungen erlauben") }
+        FilledTonalButton(onClick = { notif.launch(Manifest.permission.POST_NOTIFICATIONS) }) { Text("BENACHRICHTIGUNGEN ERLAUBEN") }
     }
 }
 
 @Composable
 private fun DonePage() {
-    Big("🎉", "Alles bereit!", "Noch ein paar Tipps:")
-    Feature("🏠", "Heute", "Deine Übersicht – mit „✏️ Kacheln anordnen“ ganz unten baust du sie dir zusammen.")
-    Feature("📱", "Widgets", "Lange auf den Startbildschirm drücken → Widgets → EnduroFit: Überblick, Essen & Trinken, Tabletten, Training.")
-    Feature("🔋", "Akku", "Damit Erinnerungen und Pulsaufnahme zuverlässig laufen: Einstellungen → Apps → EnduroFit → Akku → „Nicht eingeschränkt“.")
-    Feature("👤", "Profil", "Uhr, Waage, Ziele, Essensfoto-KI – und diese Einrichtung erneut starten.")
+    Question("Alles ", "bereit", "!", "Noch ein paar Tipps für den Start:")
+    Info("Heute", "Deine Übersicht – mit „Kacheln anordnen“ ganz unten baust du sie dir zusammen.")
+    Info("Widgets", "Lange auf den Startbildschirm drücken → Widgets → EnduroFit: Überblick, Essen & Trinken, Tabletten, Training.")
+    Info("Akku", "Für zuverlässige Erinnerungen: Einstellungen → Apps → EnduroFit → Akku → „Nicht eingeschränkt“.")
+    Info("Profil", "Uhr, Waage, Ziele, Essensfoto-KI – und diese Einrichtung erneut starten.")
 }

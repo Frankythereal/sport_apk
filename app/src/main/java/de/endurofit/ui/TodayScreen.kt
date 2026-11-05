@@ -21,6 +21,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.endurofit.data.Analysis
@@ -33,7 +35,7 @@ import java.util.Calendar
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-private val StepsColor = Color(0xFFFF6D00)
+private val StepsColor = Color(0xFF59EBD8)
 private val WaterBlue = Color(0xFF42A5F5)
 private val ActiveGreen = Color(0xFF66BB6A)
 private val KcalYellow = Color(0xFFFFCA28)
@@ -84,8 +86,8 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit, onO
                 Column(Modifier.weight(1f)) {
                     val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
                     Text(
-                        when (h) { in 5..10 -> "Guten Morgen"; in 11..17 -> "Hallo"; in 18..22 -> "Guten Abend"; else -> "Gute Nacht" } + " 👋",
-                        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
+                        (when (h) { in 5..10 -> "Guten Morgen"; in 11..17 -> "Hallo"; in 18..22 -> "Guten Abend"; else -> "Gute Nacht" }).uppercase(),
+                        style = MaterialTheme.typography.headlineMedium, color = Ef.Text,
                     )
                     Hint(
                         Calc.fmtDate(today) + " · " + when {
@@ -314,6 +316,40 @@ fun TodayScreen(onOpenTraining: () -> Unit, onOpenSession: (String) -> Unit, onO
                         }
                 }
                 "exercise" -> Appear(i++) { ExerciseTodayTile() }
+                "progress" -> Appear(i++) {
+                    // Wochenfortschritt Schritte im Stil „PROGRESS“
+                    val pct = (d.steps * 100 / goals.steps.coerceAtLeast(1))
+                    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Column(Modifier.weight(1f)) {
+                                Caps("Schritte heute")
+                                Row(verticalAlignment = Alignment.Bottom) {
+                                    CountUp(d.steps, fontSize = 46.sp, color = Ef.Text, format = { Analysis.fmtInt(it) })
+                                    Box(Modifier.padding(start = 8.dp, bottom = 10.dp).background(Accent).padding(horizontal = 5.dp, vertical = 1.dp)) {
+                                        Text("$pct%", color = Color.Black, fontFamily = Mono, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                            LabeledValue("Tagesziel", Analysis.fmtInt(goals.steps), align = Alignment.End)
+                        }
+                        HLine(Modifier.padding(vertical = 8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 6.dp)) {
+                            Box(Modifier.size(width = 14.dp, height = 8.dp).background(Ef.Teal)); Caps("Ist")
+                            Box(Modifier.size(width = 14.dp, height = 8.dp).border(1.dp, Ef.Muted)); Caps("Ziel")
+                        }
+                        val wd = java.text.SimpleDateFormat("EE", java.util.Locale.GERMAN)
+                        GoalBars(
+                            values = weekDays.map { it.steps.toFloat() }, goal = goals.steps.toFloat(),
+                            labels = weekDays.map { wd.format(java.util.Date(it.day)).take(2) }, highlight = 6,
+                        )
+                        HLine(Modifier.padding(vertical = 10.dp))
+                        Row(Modifier.fillMaxWidth()) {
+                            LabeledValue("Schritte", Analysis.fmtInt(d.steps), Modifier.weight(1f))
+                            LabeledValue("Kalorien", Calc.fmtNum(d.burned), Modifier.weight(1f), align = Alignment.CenterHorizontally)
+                            LabeledValue("Aktiv", "${d.activeMs / 60_000} MIN", Modifier.weight(1f), align = Alignment.End)
+                        }
+                    }
+                }
                 "caffeine" -> Appear(i++) {
                     Tile(Modifier.fillMaxWidth().padding(bottom = 12.dp), title = "☕ Koffein", accent = CoffeeBrown, onClick = { detail = Detail.CAFFEINE }) {
                         CaffeineTileContent()

@@ -17,6 +17,7 @@ import de.endurofit.data.Repo
 /** Reihenfolge und Sichtbarkeit der Kacheln auf „Heute“ – frei einstellbar. */
 object DashLayout {
     val all = linkedMapOf(
+        "progress" to "📊 Fortschritt (Schritte der Woche)",
         "rings" to "🎯 Dein Tag in Ringen",
         "timeline" to "🕒 Dein Tag 0–24 Uhr",
         "recovery" to "🔋 Erholung & Puls",
@@ -31,8 +32,9 @@ object DashLayout {
 
     fun order(): List<String> {
         val saved = Repo.dashOrder.split(',').filter { it in all.keys }
-        // Neue Kacheln, die es in der gespeicherten Liste noch nicht gibt, hinten anhängen
-        return saved + all.keys.filter { it !in saved }
+        // Neue Kacheln, die es in der gespeicherten Liste noch nicht gibt: „progress“ nach vorn, sonst hinten anhängen
+        val missing = all.keys.filter { it !in saved }
+        return missing.filter { it == "progress" } + saved + missing.filter { it != "progress" }
     }
 
     fun hidden(): Set<String> = Repo.dashHidden.split(',').filter { it.isNotBlank() }.toSet()

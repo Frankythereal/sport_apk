@@ -59,7 +59,7 @@ fun CountUp(
     var target by remember { mutableIntStateOf(0) }
     LaunchedEffect(value) { target = value }
     val shown by animateIntAsState(target, tween(900, easing = FastOutSlowInEasing), label = "count")
-    Text(prefix + format(shown) + suffix, modifier, fontSize = fontSize, fontWeight = FontWeight.Bold, color = color)
+    Text(prefix + format(shown) + suffix, modifier, fontSize = fontSize, fontFamily = Mono, fontWeight = FontWeight.Bold, color = color, letterSpacing = (-0.5).sp)
 }
 
 /** Kachel mit leichtem "Eindrücken" beim Antippen. */
@@ -78,13 +78,19 @@ fun Tile(
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .then(if (onClick != null) Modifier.clickable(interactionSource = source, indication = null) { onClick() } else Modifier),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(Ef.Radius),
+        colors = CardDefaults.cardColors(containerColor = Ef.Panel),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Ef.Line),
     ) {
         Column(Modifier.padding(14.dp)) {
             if (title != null) {
-                Text(title, style = MaterialTheme.typography.labelLarge, color = accent, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(6.dp).background(accent))
+                    Spacer(Modifier.width(8.dp))
+                    Text(title.uppercase(), style = MaterialTheme.typography.labelMedium, color = Ef.Text, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    if (onClick != null) { Spacer(Modifier.weight(1f)); Text("›", color = Accent, fontSize = 16.sp) }
+                }
+                Spacer(Modifier.height(10.dp))
             }
             content()
         }

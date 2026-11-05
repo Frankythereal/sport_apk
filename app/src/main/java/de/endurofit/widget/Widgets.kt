@@ -139,17 +139,17 @@ private fun load(ctx: Context): WidgetData {
 // ------------------------------------------------------------------ Farben & Bausteine
 
 private fun cp(c: Long) = ColorProvider(Color(c))
-private val Bg = cp(0xF0161616)
-private val Cell = cp(0xFF242424)
-private val White = cp(0xFFEDEDED)
-private val Grey = cp(0xFF9E9E9E)
-private val Orange = cp(0xFFFF6D00)
-private val Green = cp(0xFF66BB6A)
-private val Blue = cp(0xFF42A5F5)
-private val Red = cp(0xFFEF5350)
+private val Bg = cp(0xF5000000)
+private val Cell = cp(0xFF0F2A26)
+private val White = cp(0xFFF2F5F4)
+private val Grey = cp(0xFF7D918D)
+private val Orange = cp(0xFFFFB45C)
+private val Green = cp(0xFF59EBD8)
+private val Blue = cp(0xFF3FA7D6)
+private val Red = cp(0xFFFF6B6B)
 private val Yellow = cp(0xFFFFCA28)
-private val Purple = cp(0xFFAB47BC)
-private val Track = cp(0xFF3A3A3A)
+private val Purple = cp(0xFF59EBD8)
+private val Track = cp(0xFF1D3833)
 
 private fun liters(ml: Int) = Calc.fmtNum(ml / 1000.0, 1)
 private fun k(v: Int) = if (v >= 10_000) Calc.fmtNum(v / 1000.0, 1) + "k" else Analysis.fmtInt(v)
@@ -215,7 +215,7 @@ private fun Key(text: String, sub: String?, color: ColorProvider, action: Action
         modifier.fillMaxHeight().padding(horizontal = 2.dp).clickable(action),
     ) {
         Column(
-            GlanceModifier.fillMaxSize().cornerRadius(12.dp).background(Cell).padding(vertical = 4.dp),
+            GlanceModifier.fillMaxSize().cornerRadius(4.dp).background(Cell).padding(vertical = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -227,7 +227,7 @@ private fun Key(text: String, sub: String?, color: ColorProvider, action: Action
 
 @Composable
 private fun Frame(content: @Composable () -> Unit) {
-    Box(GlanceModifier.fillMaxSize().cornerRadius(18.dp).background(Bg).padding(horizontal = 8.dp, vertical = 6.dp)) {
+    Box(GlanceModifier.fillMaxSize().cornerRadius(8.dp).background(Bg).padding(horizontal = 8.dp, vertical = 6.dp)) {
         content()
     }
 }
@@ -425,7 +425,7 @@ private fun PillContent(ctx: Context, due: List<de.endurofit.data.Supplement>, t
                     style = TextStyle(color = if (due.isEmpty()) Green else White, fontWeight = FontWeight.Bold, fontSize = fs.sp),
                     modifier = GlanceModifier.defaultWeight(), maxLines = 1,
                 )
-                Box(GlanceModifier.cornerRadius(10.dp).background(Cell).padding(horizontal = 10.dp, vertical = 2.dp).clickable(open(ctx, "supp_add"))) {
+                Box(GlanceModifier.cornerRadius(3.dp).background(Cell).padding(horizontal = 10.dp, vertical = 2.dp).clickable(open(ctx, "supp_add"))) {
                     Text("＋", style = TextStyle(color = Purple, fontWeight = FontWeight.Bold, fontSize = fs.sp))
                 }
             }
@@ -439,7 +439,7 @@ private fun PillContent(ctx: Context, due: List<de.endurofit.data.Supplement>, t
                     Spacer(GlanceModifier.height(4.dp))
                     val late = s.at <= now
                     Row(
-                        GlanceModifier.fillMaxWidth().cornerRadius(12.dp).background(Cell).padding(horizontal = 8.dp, vertical = 4.dp),
+                        GlanceModifier.fillMaxWidth().cornerRadius(4.dp).background(Cell).padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(GlanceModifier.defaultWeight().clickable(open(ctx, "supps"))) {
@@ -450,7 +450,7 @@ private fun PillContent(ctx: Context, due: List<de.endurofit.data.Supplement>, t
                             )
                         }
                         Box(
-                            GlanceModifier.cornerRadius(10.dp).background(Purple).padding(horizontal = 12.dp, vertical = 4.dp)
+                            GlanceModifier.cornerRadius(3.dp).background(Purple).padding(horizontal = 12.dp, vertical = 4.dp)
                                 .clickable(actionRunCallback<TakeSuppAction>(actionParametersOf(SUPP to s.id))),
                         ) {
                             Text("✓", style = TextStyle(color = ColorProvider(Color.White), fontWeight = FontWeight.Bold, fontSize = fs.sp))

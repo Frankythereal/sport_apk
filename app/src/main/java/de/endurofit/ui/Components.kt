@@ -2,6 +2,10 @@
 
 package de.endurofit.ui
 
+import androidx.compose.foundation.border
+
+import androidx.compose.ui.draw.drawBehind
+
 import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -32,8 +36,9 @@ import de.endurofit.data.Session
 @Composable
 fun ScreenTitle(text: String, modifier: Modifier = Modifier, subtitle: String? = null) {
     Column(modifier.padding(bottom = 14.dp)) {
-        Text(text, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(text.uppercase(), style = MaterialTheme.typography.headlineMedium, color = Ef.Text)
         if (subtitle != null) Hint(subtitle)
+        HLine(Modifier.padding(top = 10.dp))
     }
 }
 
@@ -57,8 +62,9 @@ fun SectionCard(
     Card(
         modifier = modifier.fillMaxWidth().padding(bottom = 12.dp)
             .graphicsLayer { alpha = appear.value; translationY = (1f - appear.value) * 24f },
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(Ef.Radius),
+        colors = CardDefaults.cardColors(containerColor = Ef.Panel),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Ef.Line),
     ) {
         Column(Modifier.padding(16.dp).animateContentSize()) {
             if (title != null) {
@@ -67,10 +73,10 @@ fun SectionCard(
                     modifier = if (collapsible) Modifier.fillMaxWidth().clickable { open = !open } else Modifier.fillMaxWidth(),
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(title.uppercase(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp)
                         if (subtitle != null && (!open || !collapsible)) Hint(subtitle)
                     }
-                    if (collapsible) Text("⌄", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.graphicsLayer { rotationZ = arrow })
+                    if (collapsible) Text("⌄", fontSize = 22.sp, color = Accent, modifier = Modifier.graphicsLayer { rotationZ = arrow })
                 }
                 if (open) Spacer(Modifier.height(10.dp))
             }
@@ -83,11 +89,11 @@ fun SectionCard(
 @Composable
 fun Stat(label: String, value: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified) {
     Column(
-        modifier.clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f))
-            .padding(horizontal = 10.dp, vertical = 8.dp)
+        modifier.drawBehind { drawLine(Ef.Line, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(size.width, 0f), 1.dp.toPx()) }
+            .padding(top = 8.dp, bottom = 4.dp)
     ) {
-        Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = color, maxLines = 1)
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        Caps(label)
+        Text(value, fontSize = 17.sp, fontFamily = Mono, fontWeight = FontWeight.Bold, color = if (color == Color.Unspecified) Accent else color, maxLines = 1)
     }
 }
 
@@ -114,11 +120,12 @@ fun ActionTile(emoji: String, label: String, modifier: Modifier = Modifier, colo
     Tile(modifier, onClick = onClick) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
-                Modifier.size(46.dp).clip(RoundedCornerShape(16.dp)).background(color.copy(alpha = 0.18f)),
+                Modifier.size(44.dp).clip(RoundedCornerShape(2.dp)).background(Ef.PanelHi)
+                    .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(2.dp)),
                 contentAlignment = Alignment.Center,
-            ) { Text(emoji, fontSize = 24.sp) }
-            Spacer(Modifier.height(6.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            ) { Text(emoji, fontSize = 22.sp) }
+            Spacer(Modifier.height(8.dp))
+            Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, color = Ef.Text)
         }
     }
 }
@@ -127,7 +134,7 @@ fun ActionTile(emoji: String, label: String, modifier: Modifier = Modifier, colo
 @Composable
 fun Stepper(label: String, value: Double, step: Double, decimals: Int, onChange: (Double) -> Unit, modifier: Modifier = Modifier, min: Double = 0.0) {
     Column(
-        modifier.clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)).padding(6.dp),
+        modifier.clip(RoundedCornerShape(2.dp)).background(Ef.PanelHi).padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -143,17 +150,17 @@ fun Stepper(label: String, value: Double, step: Double, decimals: Int, onChange:
 @Composable
 fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier.fillMaxWidth().clip(RoundedCornerShape(2.dp)).border(1.dp, Ef.Line, RoundedCornerShape(2.dp)).padding(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         options.forEach { (value, label) ->
             val sel = value == selected
-            val bg by androidx.compose.animation.animateColorAsState(if (sel) Accent else Color.Transparent, label = "seg")
+            val bg by androidx.compose.animation.animateColorAsState(if (sel) Ef.PanelHi else Color.Transparent, label = "seg")
             Box(
-                Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(bg).clickable { onSelect(value) }.padding(vertical = 9.dp),
+                Modifier.weight(1f).clip(RoundedCornerShape(2.dp)).background(bg).clickable { onSelect(value) }.padding(vertical = 9.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(label, fontWeight = FontWeight.SemiBold, color = if (sel) Color.Black else MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                Text(label.uppercase(), fontWeight = FontWeight.SemiBold, color = if (sel) Accent else Ef.Muted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
         }
     }
