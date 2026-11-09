@@ -1,5 +1,7 @@
 package de.endurofit.ui
 
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+
 import androidx.compose.ui.text.drawText
 
 import androidx.compose.foundation.Canvas
@@ -85,7 +87,7 @@ fun HrChart(
             }
         }.pointerInput(samples) {
             // Mit dem Finger fahren – der Schieber bleibt nach dem Loslassen stehen
-            androidx.compose.foundation.gestures.detectHorizontalDragGestures(
+            detectHorizontalDragGestures(
                 onDragStart = { off -> sel = nearest(samples, t0 + (off.x.coerceIn(0f, size.width.toFloat()) / size.width * span).toLong()) },
             ) { change, _ ->
                 change.consume()
