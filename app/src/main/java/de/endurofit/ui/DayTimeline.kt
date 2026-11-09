@@ -1,5 +1,9 @@
 package de.endurofit.ui
 
+import androidx.compose.foundation.clickable
+
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -62,7 +66,7 @@ fun DayTimeline(
     val span = (end - day).toFloat()
     val reveal = remember { Animatable(0f) }
     LaunchedEffect(day) { reveal.snapTo(0f); reveal.animateTo(1f, tween(1400, easing = FastOutSlowInEasing)) }
-    var info by remember(day) { mutableStateOf<String?>(null) }
+    var selT by remember(day) { mutableStateOf<Long?>(null) }
 
     fun describe(t: Long): String {
         val parts = ArrayList<String>()
@@ -75,15 +79,31 @@ fun DayTimeline(
         hr?.points?.minByOrNull { abs(it.t - t) }?.takeIf { abs(it.t - t) < 20 * 60_000 }?.let { parts.add("❤️ ${it.bpm} bpm") }
         return parts.joinToString(" · ")
     }
+    val info = selT?.let { describe(it) }
 
     Column {
         Canvas(
-            Modifier.fillMaxWidth().height(if (hr != null && hr.points.size > 1) 170.dp else 92.dp).pointerInput(day, sessions, food, water) {
-                detectTapGestures { off ->
-                    val gw = size.width - 34.dp.toPx()
-                    if (off.x <= gw) info = describe(day + (off.x / gw * span).toLong())
+            Modifier.fillMaxWidth().height(if (hr != null && hr.points.size > 1) 190.dp else 92.dp)
+                .pointerInput(day) {
+                    // Antippen setzt den Schieber
+                    detectTapGestures { off ->
+                        val gw = size.width - (if (hr != null && hr.points.size > 1) 34.dp.toPx() else 0f)
+                        selT = day + (off.x.coerceIn(0f, gw) / gw * span).toLong()
+                    }
                 }
-            }
+                .pointerInput(day) {
+                    // Mit dem Finger seitlich fahren – der Schieber bleibt danach stehen
+                    detectHorizontalDragGestures(
+                        onDragStart = { off ->
+                            val gw = size.width - (if (hr != null && hr.points.size > 1) 34.dp.toPx() else 0f)
+                            selT = day + (off.x.coerceIn(0f, gw) / gw * span).toLong()
+                        },
+                    ) { change, _ ->
+                        change.consume()
+                        val gw = size.width - (if (hr != null && hr.points.size > 1) 34.dp.toPx() else 0f)
+                        selT = day + (change.position.x.coerceIn(0f, gw) / gw * span).toLong()
+                    }
+                }
         ) {
             val hasHr = hr != null && hr.points.size > 1
             // Rechts Platz für die Puls-Skala
@@ -174,8 +194,32 @@ fun DayTimeline(
             // Jetzt-Linie
             if (now in day until end) {
                 val nx = x(now)
-                drawLine(Color.White.copy(alpha = 0.8f), Offset(nx, 0f), Offset(nx, h), strokeWidth = 2f,
+                drawLine(Color.White.copy(alpha = 0.35f), Offset(nx, 0f), Offset(nx, h), strokeWidth = 1.5f,
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f)))
+            }
+            // ---------- Schieber ----------
+            selT?.let { t ->
+                val sx = x(t)
+                drawLine(Accent, Offset(sx, 0f), Offset(sx, h), strokeWidth = 2.dp.toPx())
+                val p = hr?.points?.minByOrNull { abs(it.t - t) }?.takeIf { abs(it.t - t) < 20 * 60_000 }
+                var label = Calc.fmtClock(t)
+                if (hasHr && p != null) {
+                    val pts = hr!!.points
+                    val lo = (((pts.minOf { it.bpm } - 5) / 10) * 10).coerceAtLeast(30).toFloat()
+                    val hi = (((pts.maxOf { it.bpm } + 14) / 10) * 10).toFloat().coerceAtLeast(lo + 30)
+                    val top = h * 0.42f; val bot = h * 0.98f
+                    val py = bot - (p.bpm - lo) / (hi - lo) * (bot - top)
+                    drawCircle(Color.Black, 6.dp.toPx(), Offset(sx, py))
+                    drawCircle(zoneColor(Calc.zoneOf(p.bpm, maxHr)).takeIf { Calc.zoneOf(p.bpm, maxHr) >= 2 } ?: Accent, 4.5.dp.toPx(), Offset(sx, py))
+                    label += "  ·  ${p.bpm} bpm"
+                }
+                // Etikett oben am Schieber
+                val tl = measurer.measure(label, labelStyle.copy(color = Color.Black, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontFamily = Mono))
+                val bw = tl.size.width + 12.dp.toPx(); val bh = tl.size.height + 6.dp.toPx()
+                val bx = (sx - bw / 2).coerceIn(0f, size.width - bw)
+                val by = if (hasHr) h * 0.42f - bh - 4.dp.toPx() else 0f
+                drawRoundRect(Accent, Offset(bx, by), Size(bw, bh), CornerRadius(2.dp.toPx()))
+                drawText(tl, topLeft = Offset(bx + 6.dp.toPx(), by + 3.dp.toPx()))
             }
         }
         Row(Modifier.fillMaxWidth().padding(end = if (hr != null && hr.points.size > 1) 34.dp else 0.dp)) {
@@ -187,7 +231,12 @@ fun DayTimeline(
             }
         }
         Spacer(Modifier.height(4.dp))
-        Hint(info ?: if (hr != null && hr.points.size > 1) "Puls: Skala rechts in bpm · dünne Linie = Ruhepuls · Farbe = Pulszone. Antippen zeigt die Uhrzeit." else "Tippe auf die Zeitleiste, um zu sehen, was um diese Uhrzeit war.")
+        if (info != null) {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(info, style = MaterialTheme.typography.bodySmall, color = Ef.Text, modifier = Modifier.weight(1f))
+                Text("✕", color = Ef.Muted, modifier = Modifier.clickable { selT = null }.padding(8.dp))
+            }
+        } else Hint(if (hr != null && hr.points.size > 1) "Mit dem Finger über das Diagramm fahren – der Schieber zeigt Uhrzeit, Puls und was du gemacht hast." else "Tippe auf die Zeitleiste, um zu sehen, was um diese Uhrzeit war.")
         Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             listOf(SleepColor to "Schlaf", Color(0xFF59EBD8) to "Training", FoodColor to "Essen", WaterColor to "Trinken", HrColor to "Puls").forEach { (c, l) ->
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {

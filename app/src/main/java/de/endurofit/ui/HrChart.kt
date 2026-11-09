@@ -1,5 +1,7 @@
 package de.endurofit.ui
 
+import androidx.compose.ui.text.drawText
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -64,20 +66,30 @@ fun HrChart(
     }
 
     var sel by remember(samples) { mutableStateOf<HrSample?>(null) }
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val bubbleStyle = MaterialTheme.typography.labelSmall.copy(color = Color.Black, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontFamily = Mono)
 
     Column(modifier) {
         if (interactive) {
             val s = sel
             Hint(
                 if (s != null) "${Calc.fmtTime(s.t)} · ${Calc.fmtDuration(s.t - t0)} nach Start · ${s.bpm} bpm (Z${Calc.zoneOf(s.bpm, maxHr)})"
-                else "Tippe ins Diagramm für Uhrzeit und Puls",
+                else "Mit dem Finger über das Diagramm fahren für Uhrzeit und Puls",
                 Modifier.padding(bottom = 4.dp)
             )
         }
         val tapMod = if (interactive) Modifier.pointerInput(samples) {
             detectTapGestures { off ->
-                val t = t0 + (off.x / size.width * span).toLong()
+                val t = t0 + (off.x.coerceIn(0f, size.width.toFloat()) / size.width * span).toLong()
                 sel = nearest(samples, t)
+            }
+        }.pointerInput(samples) {
+            // Mit dem Finger fahren – der Schieber bleibt nach dem Loslassen stehen
+            androidx.compose.foundation.gestures.detectHorizontalDragGestures(
+                onDragStart = { off -> sel = nearest(samples, t0 + (off.x.coerceIn(0f, size.width.toFloat()) / size.width * span).toLong()) },
+            ) { change, _ ->
+                change.consume()
+                sel = nearest(samples, t0 + (change.position.x.coerceIn(0f, size.width.toFloat()) / size.width * span).toLong())
             }
         } else Modifier
 
@@ -117,8 +129,14 @@ fun HrChart(
             }
             sel?.let {
                 val sx = x(it.t)
-                drawLine(Color(0x88FFFFFF), Offset(sx, 0f), Offset(sx, h), strokeWidth = 1f)
-                drawCircle(Color.White, 5.dp.toPx(), Offset(sx, y(it.bpm.toFloat())))
+                drawLine(Accent, Offset(sx, 0f), Offset(sx, h), strokeWidth = 2.dp.toPx())
+                drawCircle(Color.Black, 6.dp.toPx(), Offset(sx, y(it.bpm.toFloat())))
+                drawCircle(Color.White, 4.5.dp.toPx(), Offset(sx, y(it.bpm.toFloat())))
+                val tl = measurer.measure("${Calc.fmtClock(it.t)}  ·  ${it.bpm} bpm", bubbleStyle)
+                val bw = tl.size.width + 12.dp.toPx(); val bh = tl.size.height + 6.dp.toPx()
+                val bx = (sx - bw / 2).coerceIn(0f, w - bw)
+                drawRoundRect(Accent, Offset(bx, 0f), Size(bw, bh), androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()))
+                drawText(tl, topLeft = Offset(bx + 6.dp.toPx(), 3.dp.toPx()))
             }
         }
         Row(Modifier.fillMaxWidth()) {
